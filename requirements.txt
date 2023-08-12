@@ -1,5 +1,6 @@
 torch
 elasticai-creator
 matplotlib
+seaborn
 jupyterlab
 ipykernel
