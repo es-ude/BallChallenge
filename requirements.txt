@@ -1,6 +1,8 @@
-torch
-elasticai-creator
+numpy
+pandas
 matplotlib
 seaborn
+torch
+elasticai-creator
 jupyterlab
 ipykernel
