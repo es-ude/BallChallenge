@@ -16,11 +16,11 @@
 #include "enV5HwController.h"
 
 // pico-sdk headers
-#include <hardware/i2c.h>
-#include <hardware/spi.h>
-#include <hardware/watchdog.h>
-#include <pico/bootrom.h>
-#include <pico/stdlib.h>
+#include "hardware/i2c.h"
+#include "hardware/spi.h"
+#include "hardware/watchdog.h"
+#include "pico/bootrom.h"
+#include "pico/stdlib.h"
 
 // external headers
 #include <malloc.h>

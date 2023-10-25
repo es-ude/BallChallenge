@@ -1,63 +1,56 @@
-cmake_minimum_required(VERSION 3.25)
+cmake_minimum_required(VERSION 3.13)
 include(extern/elastic-ai.runtime.enV5/enV5_init.cmake)
-include(extern/elastic-ai.runtime.enV5/helpers.cmake)
 
+function(make_to_output_file target)
+    # enable usb output, disable uart output
+    pico_enable_stdio_usb(${target} 1)
+    pico_enable_stdio_uart(${target} 0)
+    # create map/bin/hex/uf2 file etc.
+    pico_add_uf2_output(${target})
+    # move u2f files after build to out directory
+    file(RELATIVE_PATH relative_path ${CMAKE_SOURCE_DIR} ${CMAKE_CURRENT_LIST_DIR})
+    add_custom_command(TARGET ${target} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy
+            ${CMAKE_BINARY_DIR}/${relative_path}/${target}.uf2
+            ${CMAKE_SOURCE_DIR}/out/${CMAKE_BUILD_TYPE}/${relative_path}/${target}.uf2)
+endfunction()
 
 if (DEBUG_OUTPUT)
     add_definitions(-DDEBUG_MODE)
 endif ()
 
 
-if (UNIT_TEST)
-    message(NOTICE "INFO: Building Unit tests")
+set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
 
-    project(enV5 C CXX ASM)
+# add submodule libraries
+include(extern/elastic-ai.runtime.enV5/extern/pico-sdk/pico_sdk_init.cmake)
+add_subdirectory(extern/elastic-ai.runtime.enV5/extern/freeRTOS/Kernel/portable/ThirdParty/GCC/RP2040 FREERTOS_KERNEL)
 
-    include(CTest)
+project(enV5 C CXX ASM)
 
-    include_unity()
-    add_subdirectory(test/unit)
+pico_sdk_init()
+enV5_init()
 
-else ()
-    message(NOTICE "INFO: Building for enV5")
-    set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
 
-    # inlcude pico-sdk from enV5
-    include(extern/elastic-ai.runtime.enV5/extern/pico-sdk/pico_sdk_init.cmake)
-    add_subdirectory(extern/elastic-ai.runtime.enV5/extern/freeRTOS/Kernel/portable/ThirdParty/GCC/RP2040 FREERTOS_KERNEL)
-    add_subdirectory(extern/elastic-ai.runtime.enV5/extern/elastic-ai.runtime.c)
+if (TARGET tinyusb_device)
 
-    project(enV5 C CXX ASM)
+    add_subdirectory(extern/elastic-ai.runtime.enV5/test/hardware)
 
-    # initialize pico-sdk
-    pico_sdk_init()
-
-    # include enV5 libraries
-    enV5_init()
-
-    #    include_src() # you still need to include your own sources
-
-    if (TARGET tinyusb_device)
-        add_executable(main src/wrist.c) # creates executable
-        target_include_directories(main PUBLIC ${CMAKE_SOURCE_DIR}/src)
-        target_link_libraries(main
-                pico_stdlib
-                http_lib
-                freeRtosUtils
-                network_lib
-                espBroker_lib
-                fpga_configuration_handler
-                flash_lib
-                middleware_lib
-                spi_lib
-                sensor_lib_adxl345b
-                enV5_hwc
-                esp_lib
-                uart_lib
-                hardware_i2c
-                hardware_spi)
-        make_to_output_file(main)
-    elseif (PICO_ON_DEVICE)
-         message(WARNING "not building Project because TinyUSB submodule is not initialized in the SDK")
-    endif ()
+    add_executable(main src/wrist.c) # creates executable
+    target_include_directories(main PUBLIC ${CMAKE_SOURCE_DIR}/src)
+    target_link_libraries(main
+            pico_stdlib
+            http_lib
+            freeRtosUtils
+            network_lib
+            espBroker_lib
+            fpga_configuration_handler
+            flash_lib
+            middleware_lib
+            spi_lib
+            sensor_lib_adxl345b
+            enV5_hwc)
+    make_to_output_file(main)
+elseif (PICO_ON_DEVICE)
+    message(WARNING "not building Project because TinyUSB submodule is not initialized in the SDK")
 endif ()
