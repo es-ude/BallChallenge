@@ -1,4 +1,4 @@
-#define SOURCE_FILE "MAIN"
+#define SOURCE_FILE "DATA-COLLECT-APP"
 
 // internal headers
 #include "Adxl345b.h"
@@ -174,9 +174,7 @@ _Noreturn void getGValueTask(void) {
         freeRtosTaskWrapperTaskSleep(250);
         env5HwLedsAllOff();
 
-        snprintf(timeBuffer, sizeof(timeBuffer), "%lu", time_us_64() / 1000000);
-        strcpy(data, timeBuffer);
-        strcat(data, ",");
+        strcpy(data, "");
         count = 0;
         uint32_t currentTime = time_us_64();
         uint32_t startTime = time_us_64();
