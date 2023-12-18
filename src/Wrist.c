@@ -1,4 +1,4 @@
-#define SOURCE_FILE "MAIN"
+#define SOURCE_FILE "WRIST-APP"
 
 // internal headers
 #include "Adxl345b.h"
@@ -125,7 +125,7 @@ void init(void) {
     // init IO
     stdio_init_all();
     // waits for usb connection, REMOVE to continue without waiting for connection
-    //while ((!stdio_usb_connected())) {}
+    // while ((!stdio_usb_connected())) {}
     // initialize ESP over UART
     espInit();
 
@@ -149,7 +149,7 @@ void init(void) {
     freeRtosQueueWrapperCreate();
 
     // enables watchdog timer (5s)
-    //watchdog_enable(5000, 1);
+    // watchdog_enable(5000, 1);
 }
 
 _Noreturn void getGValueTask(void) {
@@ -253,9 +253,9 @@ _Noreturn void fpgaTask(void) {
                     downloadRequest->fileSizeInBytes)
 
         fpgaConfigurationHandlerError_t configError =
-                fpgaConfigurationHandlerDownloadConfigurationViaHttp(downloadRequest->url,
-                                                                     downloadRequest->fileSizeInBytes,
-                                                                     downloadRequest->startAddress);
+            fpgaConfigurationHandlerDownloadConfigurationViaHttp(downloadRequest->url,
+                                                                 downloadRequest->fileSizeInBytes,
+                                                                 downloadRequest->startAddress);
 
         // clean artifacts
         free(downloadRequest->url);
