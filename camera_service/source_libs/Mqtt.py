@@ -15,6 +15,8 @@ class MqttClient:
 
     def _on_connect(self, client, userdata, flags, rc):
         print("Connected to Broker")
+        for topic in self.topics.keys():
+            self.client.subscribe(topic)
 
     def _on_subscribe(self, client, userdata, mid, granted_qos):
         print(f"Subscribed: {mid} with QOS: {granted_qos}")
