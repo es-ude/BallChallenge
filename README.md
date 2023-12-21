@@ -4,23 +4,23 @@
 
 ### Project
 
-Make sure that you have `python3.11` and `git` installed on your system. To install `git` you can follow the installation instructions for your system as described [here](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git).
+Make sure you have `python3.11` and `git` installed on your system. To install `git` you can follow the installation instructions for your system as described [here](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git).
 
-An easy and platform independent method to make sure you have a working `python3.11` environment, that can also exists in parallel to other python versions is to use Miniconda (installation instruction for Windows, macOS and Linux can be found [here](https://docs.conda.io/projects/miniconda/en/latest/)).
+An easy and platform-independent method to make sure you have a working `python3.11` environment that can coexists with other versions of python is to use Miniconda (installation instructions for Windows, macOS and Linux can be found [here](https://docs.conda.io/projects/miniconda/en/latest/)).
 
-If you have Miniconda installed you can create a `python3.11` environment for this project using the following command:
+Once you have Miniconda installed you can use the following command to create a `python3.11` environment for this project:
 
 ```bash
 conda create -n ballchallenge python=3.11
 ```
 
-To activate this environment use the following command:
+To activate this environment, use the following command:
 
 ```bash
 conda activate ballchallenge
 ```
 
-After activating the ballchallenge conda environment or any other `python3.11` environment you can download the project and install all necessary dependencies using the following commands:
+After activating the ballchallenge conda environment or any other `python3.11` environment, you can download the project and install all necessary dependencies using the following commands:
 
 ```bash
 git clone https://github.com/es-ude/BallChallenge.git
@@ -34,4 +34,4 @@ pip install -r requirements.txt
 
 ### IDE
 
-As an IDE for this project we recommend to use Visual Studio Code (installation instructions can be found [here](https://code.visualstudio.com/)) with the Python and Jupyter extension installed. But you can use any other IDE if you want (e.g. PyCharm).
+As an IDE for this project, we recommend using Visual Studio Code (installation instructions can be found [here](https://code.visualstudio.com/)) with the Python and Jupyter extension installed. However, you can use any other IDE that supports Jupyter notebooks (e.g. PyCharm).
