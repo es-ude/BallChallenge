@@ -163,4 +163,4 @@ cython_debug/
 .vscode/
 do_not_commit/
 
-data/
+data/*.csv
