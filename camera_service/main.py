@@ -5,12 +5,15 @@ from source_libs.Mqtt import MqttClient
 from datetime import datetime
 from os.path import abspath, dirname, join
 from sys import exit
+from time import sleep
 
 camera: Camera = None
 mqtt_client: MqttClient = None
 
-BROKER_IP = "localhost"
-BROKER_PORT = 1883
+BROKER_IP: str = "localhost"
+BROKER_PORT: int = 1883
+
+SLEEP_BEFORE_IMAGE_CAPTURE: float = 5.0
 
 
 def setup_camera():
@@ -30,6 +33,7 @@ def setup_camera():
 
 
 def take_and_store_image():
+    sleep(SLEEP_BEFORE_IMAGE_CAPTURE)
     print("Taking image...")
     try:
         image = camera.take_image(show_image=False)
@@ -43,7 +47,7 @@ if __name__ == "__main__":
     setup_camera()
 
     mqtt_client = MqttClient()
-    mqtt_client.start()
-    mqtt_client.subscribe(topic="measurements", subscription_callback=take_and_store_image)
+    mqtt_client.start(broker=BROKER_IP, port=BROKER_PORT)
+    mqtt_client.subscribe(topic="eip://uni-due.de/es/enV5/DO/MEASUREMENTS", subscription_callback=take_and_store_image)
     input("Press any key to exit...\n")
     mqtt_client.stop()
