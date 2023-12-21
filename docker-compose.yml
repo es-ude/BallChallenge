@@ -1,0 +1,67 @@
+# start with: docker compose up -d
+# stop with: docker compose down
+# Sensor Values can be found under ./SensorValues
+
+services:
+  broker:
+    image: hivemq/hivemq-ce:2023.4
+    restart: always
+    environment:
+      - HIVEMQ_LOG_LEVEL=ERROR
+    networks:
+      - elastic-ai-network
+    ports:
+      - "1883:1883"
+
+  monitor:
+    image: ghcr.io/es-ude/ball-challenge.monitor:latest
+    restart: always
+    depends_on:
+      - broker
+    networks:
+      - elastic-ai-network
+    ports:
+      - "8081:8081"
+    environment:
+      - HOST_IP=${HOST_IP}
+    command:
+      - "-b"
+      - "broker"
+      - "-p"
+      - "1883"
+
+  enV5-twin:
+    image: ghcr.io/es-ude/ball-challenge.env5twin:latest
+    restart: always
+    depends_on:
+      - broker
+      - monitor
+    networks:
+      - elastic-ai-network
+    command:
+      - "-b"
+      - "broker"
+      - "-p"
+      - "1883"
+  
+  csv-service:
+    image: ghcr.io/es-ude/ball-challenge.csvservice:latest
+    restart: always
+    depends_on:
+      - broker
+      - enV5-twin
+    volumes:
+      - ./SensorValues:/SensorValues
+    networks:
+      - elastic-ai-network
+    command:
+      - "-b"
+      - "broker"
+      - "-p"
+      - "1883"
+
+networks:
+  elastic-ai-network:
+    external: false
+    name: elastic-ai-network
+
