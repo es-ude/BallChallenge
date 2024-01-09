@@ -21,7 +21,7 @@ def generate_smooth_labels(
     target_std: float,
     grid_size: tuple[int, int],
 ) -> np.ndarray:
-    labels = np.empty((len(target_points), *grid_size), dtype=np.float32)
+    labels = np.zeros((len(target_points), *grid_size), dtype=np.float32)
 
     x_range = np.arange(grid_size[0])
     y_range = np.arange(grid_size[1])
@@ -29,5 +29,17 @@ def generate_smooth_labels(
 
     for i, point in enumerate(target_points):
         labels[i] = _gaussian_density_2d(x, y, mean_point=point, std=target_std)
+
+    return labels
+
+
+def generate_hard_labels(
+    target_points: list[tuple[float, float]],
+    grid_size: tuple[int, int],
+) -> np.ndarray:
+    labels = np.zeros((len(target_points), *grid_size), dtype=np.float32)
+
+    for i, point in enumerate(target_points):
+        labels[i, *point[::-1]] = 1
 
     return labels
