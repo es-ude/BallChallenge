@@ -23,7 +23,7 @@ def run_training(
     ds_test: Dataset,
     batch_size: int,
     epochs: int,
-    learning_rate: int,
+    learning_rate: float,
     device: Any,
 ) -> TrainHistory:
     dl_train = DataLoader(ds_train, batch_size=batch_size, shuffle=True)
