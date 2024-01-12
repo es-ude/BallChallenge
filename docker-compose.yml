@@ -59,9 +59,10 @@ services:
       - "broker"
       - "-p"
       - "1883"
+      - "--camera-address"
+      - "127.0.0.1"
 
 networks:
   elastic-ai-network:
     external: false
     name: elastic-ai-network
-
