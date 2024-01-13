@@ -31,7 +31,7 @@ def run_training(
 
     model.to(device)
 
-    loss_fn = torch.nn.MSELoss()
+    loss_fn = torch.nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     history = TrainHistory()
 

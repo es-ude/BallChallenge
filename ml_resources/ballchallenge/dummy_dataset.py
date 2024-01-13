@@ -6,11 +6,12 @@ from .label_generation import generate_smooth_labels
 
 
 def _generate_dummy_samples_labels(
-    grid_size: tuple[int, int] = (10, 10),
+    grid_size: tuple[int, int] = (20, 20),
     sample_length: int = 1000,
-    samples_per_pixel: int = 50,
+    samples_per_pixel: int = 25,
     base_freq: int = 100,
     freq_offset: int = 50,
+    label_std: float = 1,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     def sinus(frequency: float) -> torch.Tensor:
         xs = torch.linspace(0, 1, sample_length)
@@ -18,7 +19,7 @@ def _generate_dummy_samples_labels(
 
     def offset(pixel: int) -> float:
         def noise() -> float:
-            return float(torch.randn(1).item()) * freq_offset * 0.5
+            return float(torch.randn(1).item()) * freq_offset * 0.1
 
         return freq_offset * pixel + noise()
 
@@ -37,15 +38,20 @@ def _generate_dummy_samples_labels(
                 target_positions.append((x_pixel, y_pixel))
 
     samples = torch.stack(samples)
-    labels = torch.tensor(generate_smooth_labels(target_positions, 1, grid_size))
+    labels = torch.tensor(
+        generate_smooth_labels(target_positions, label_std, grid_size)
+    )
 
     return samples, labels
 
 
 class DummyDataset(Dataset):
-    def __init__(self) -> None:
+    def __init__(self, grid_size: tuple[int, int], label_std: float) -> None:
         super().__init__()
-        self._samples, self._labels = _generate_dummy_samples_labels(sample_length=1000)
+        self._samples, self._labels = _generate_dummy_samples_labels(
+            grid_size=grid_size, sample_length=1000, label_std=label_std
+        )
+        self._labels = self._labels.view(len(self._labels), -1)
 
     def __len__(self) -> int:
         return len(self._labels)
