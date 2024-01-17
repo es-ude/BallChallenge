@@ -163,4 +163,5 @@ cython_debug/
 .vscode/
 do_not_commit/
 
-data/*.csv
+data/*
+!data/README.md
