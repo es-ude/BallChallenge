@@ -6,7 +6,7 @@ import torch
 from torch.utils.data import Dataset
 import pandas as pd
 
-from ballchallenge.label_generation import generate_smooth_labels
+from ballchallenge.label_generation import generate_smooth_labels, generate_hard_labels
 
 
 def _load_samples_and_positions(

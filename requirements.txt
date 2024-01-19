@@ -3,6 +3,6 @@ pandas
 matplotlib
 seaborn
 torch
-elasticai-creator
+git+https://github.com/glencoe/elasticai.creator-towards-online-training.git
 jupyterlab
 ipykernel

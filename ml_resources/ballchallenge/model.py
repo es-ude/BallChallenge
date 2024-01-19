@@ -1,12 +1,18 @@
 import torch
-
+from torch.nn import Flatten as _Flatten
 from elasticai.creator.nn import Sequential as TranslatableSequential
 from elasticai.creator.nn.fixed_point import (
     quantize,
-    BatchNormedConv1d,
+    Conv1d,
     Linear,
     HardTanh,
 )
+from elasticai.creator.vhdl.shared_designs.null_design import NullDesign
+
+
+class Flatten(_Flatten):
+    def create_design(self, name: str):
+        return NullDesign(name)
 
 
 class BallChallengeModel(torch.nn.Module):
@@ -21,9 +27,9 @@ class BallChallengeModel(torch.nn.Module):
         self.grid_width, self.grid_height = grid_size
         self.total_bits = total_bits
         self.frac_bits = frac_bits
-
+        conv = Conv1d
         self.hardware_model = TranslatableSequential(
-            BatchNormedConv1d(
+            conv(
                 in_channels=3,
                 out_channels=16,
                 signal_length=signal_length,
@@ -32,7 +38,7 @@ class BallChallengeModel(torch.nn.Module):
                 frac_bits=frac_bits,
             ),
             HardTanh(total_bits=total_bits, frac_bits=frac_bits),
-            BatchNormedConv1d(
+            conv(
                 in_channels=16,
                 out_channels=8,
                 signal_length=signal_length - (8 - 1),
@@ -41,7 +47,7 @@ class BallChallengeModel(torch.nn.Module):
                 frac_bits=frac_bits,
             ),
             HardTanh(total_bits=total_bits, frac_bits=frac_bits),
-            BatchNormedConv1d(
+            conv(
                 in_channels=8,
                 out_channels=4,
                 signal_length=signal_length - (8 - 1) - (16 - 1),
@@ -50,7 +56,7 @@ class BallChallengeModel(torch.nn.Module):
                 frac_bits=frac_bits,
             ),
             HardTanh(total_bits=total_bits, frac_bits=frac_bits),
-            BatchNormedConv1d(
+            conv(
                 in_channels=4,
                 out_channels=2,
                 signal_length=signal_length - (8 - 1) - (16 - 1) - (32 - 1),
@@ -59,7 +65,7 @@ class BallChallengeModel(torch.nn.Module):
                 frac_bits=frac_bits,
             ),
             HardTanh(total_bits=total_bits, frac_bits=frac_bits),
-            BatchNormedConv1d(
+            conv(
                 in_channels=2,
                 out_channels=1,
                 signal_length=signal_length - (8 - 1) - (16 - 1) - (32 - 1) - (64 - 1),
@@ -67,6 +73,7 @@ class BallChallengeModel(torch.nn.Module):
                 total_bits=total_bits,
                 frac_bits=frac_bits,
             ),
+            Flatten(),
             HardTanh(total_bits=total_bits, frac_bits=frac_bits),
             Linear(
                 in_features=signal_length
@@ -83,9 +90,8 @@ class BallChallengeModel(torch.nn.Module):
         )
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        *first_dims, in_channels, signal_length = inputs.shape
         quantized_inputs = quantize(
-            x=inputs.view(*first_dims, in_channels * signal_length),
+            x=inputs,
             total_bits=self.total_bits,
             frac_bits=self.frac_bits,
         )
