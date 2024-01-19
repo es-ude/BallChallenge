@@ -2,16 +2,15 @@ import numpy as np
 from math import sqrt
 
 
-def _gaussian_density(values: np.ndarray, mean: float, std: float) -> np.ndarray:
-    return 1 / (std * sqrt(2 * np.pi)) * np.exp(-0.5 * (values - mean) ** 2 / std**2)
+def _normal_density(values: np.ndarray, mean: float, std: float) -> np.ndarray:
+    return 1 / (std * sqrt(2 * np.pi)) * np.exp(-0.5 * ((values - mean) / std) ** 2)
 
 
-def _gaussian_density_2d(
+def _normal_density_2d(
     x: np.ndarray, y: np.ndarray, mean_point: tuple[float, float], std: float
 ) -> np.ndarray:
-    x_mean, y_mean = mean_point
-    x_gauss = _gaussian_density(x, mean=x_mean, std=std)
-    y_gauss = _gaussian_density(y, mean=y_mean, std=std)
+    x_gauss = _normal_density(values=x, mean=mean_point[0], std=std)
+    y_gauss = _normal_density(values=y, mean=mean_point[1], std=std)
     return x_gauss * y_gauss
 
 
@@ -29,6 +28,8 @@ def generate_smooth_labels(
     x, y = np.meshgrid(x_range, y_range)
 
     for i, point in enumerate(target_points):
-        labels[i] = _gaussian_density_2d(x, y, mean_point=point, std=target_std)
+        labels[i] = _normal_density_2d(x, y, mean_point=point, std=target_std)
 
-    return labels
+    normalized_labels = labels / labels.sum()
+
+    return normalized_labels
