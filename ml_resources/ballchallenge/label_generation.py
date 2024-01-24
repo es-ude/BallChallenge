@@ -34,12 +34,14 @@ def generate_smooth_labels(
 
     return normalized_labels
 
-def generate_hard_labels(target_points: list[tuple[float, float]],
-                         target_std: float,
-                         x_value_range: tuple[float, float],
-                         y_value_range: tuple[float, float],
-                         grid_size: tuple[int, int]) -> np.ndarray:#
-    
+
+def generate_hard_labels(
+    target_points: list[tuple[float, float]],
+    target_std: float,
+    x_value_range: tuple[float, float],
+    y_value_range: tuple[float, float],
+    grid_size: tuple[int, int],
+) -> np.ndarray:  #
     labels = np.zeros((len(target_points), *grid_size), dtype=np.float32)
     for i, point in enumerate(target_points):
         x_diff = x_value_range[1] - x_value_range[0]
@@ -54,4 +56,3 @@ def generate_hard_labels(target_points: list[tuple[float, float]],
         labels[i, x_grid_pos, y_grid_pos] = 1
 
     return labels
-    
