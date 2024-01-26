@@ -1,8 +1,10 @@
 numpy
 pandas
+pyarrow
 matplotlib
 seaborn
 torch
 git+https://github.com/glencoe/elasticai.creator-towards-online-training.git
 jupyterlab
 ipykernel
+opencv-python
