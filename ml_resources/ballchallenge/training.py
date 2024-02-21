@@ -1,4 +1,5 @@
 from typing import Any
+
 import torch
 from torch.utils.data import Dataset, DataLoader
 
@@ -113,8 +114,6 @@ def run_training(
         model.train()
 
         running_loss = 0
-        correct_predicted = 0
-        num_samples = 0
 
         for samples, labels in dl_train:
             samples = samples.to(device)
@@ -129,17 +128,12 @@ def run_training(
             optimizer.step()
 
             running_loss += loss.item()
-            correct_predicted += _correct_predicted(predictions, labels)
-            num_samples += len(samples)
 
         train_loss = running_loss / len(dl_train)
-        train_accuracy = correct_predicted / num_samples
 
         model.eval()
 
         running_loss = 0
-        correct_predicted = 0
-        num_samples = 0
 
         with torch.no_grad():
             for samples, labels in dl_test:
@@ -150,20 +144,14 @@ def run_training(
                 loss = loss_fn(predictions, labels)
 
                 running_loss += loss.item()
-                correct_predicted += _correct_predicted(predictions, labels)
-                num_samples += len(samples)
 
         test_loss = running_loss / len(dl_test)
-        test_accuracy = correct_predicted / num_samples
 
         history.log("epoch", epoch, epoch)
         history.log("loss", train_loss, test_loss)
-        history.log("accuracy", train_accuracy, test_accuracy)
 
         print(
-            f"[epoch {epoch}/{epochs}] "
-            f"train_loss: {train_loss:.04f} ; train_accuracy: {train_accuracy:.04f} ; "
-            f"test_loss: {test_loss:.04f} ; test_accuracy: {test_accuracy:.04f}"
+            f"[epoch {epoch}/{epochs}] train_loss: {train_loss:.04f} ; test_loss: {test_loss:.04f}"
         )
 
     return history
