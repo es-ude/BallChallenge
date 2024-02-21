@@ -37,7 +37,8 @@ class AccelerometerDatasetWithPointLabels(Dataset):
             labels_file_name="labels.csv",
             clipped_sample_length=1000,
         )
-        self._labels = torch.tensor(positions)
+        self._samples = self._samples.float()
+        self._labels = torch.tensor(positions, dtype=torch.float32)
         if transform_samples is not None:
             self._samples = transform_samples(self._samples)
 

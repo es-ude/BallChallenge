@@ -5,6 +5,76 @@ from torch.utils.data import Dataset, DataLoader
 from .train_history import TrainHistory
 
 
+
+def run_training_for_position(
+    model: torch.nn.Module,
+    ds_train: Dataset,
+    ds_test: Dataset,
+    batch_size: int,
+    epochs: int,
+    learning_rate: float,
+    device: Any,
+) -> TrainHistory:
+    dl_train = DataLoader(ds_train, batch_size=batch_size, shuffle=True)
+    dl_test = DataLoader(ds_test, batch_size=batch_size, shuffle=False)
+
+    model.to(device)
+
+    loss_fn = torch.nn.functional.mse_loss
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    history = TrainHistory()
+    print("start training")
+    for epoch in range(1, epochs + 1):
+        model.train()
+
+        running_loss = 0
+        num_samples = 0
+
+        for samples, labels in dl_train:
+            samples = samples.to(device)
+            labels = labels.to(device)
+
+            predictions = model(samples)
+            loss = loss_fn(predictions, labels)
+
+            loss.backward()
+            optimizer.step()
+            optimizer.zero_grad()
+
+            running_loss += loss.item()
+            num_samples += len(samples)
+
+        train_loss = running_loss / len(dl_train)
+
+        model.eval()
+
+        running_loss = 0
+        num_samples = 0
+
+        with torch.no_grad():
+            for samples, labels in dl_test:
+                samples = samples.to(device)
+                labels = labels.to(device)
+
+                predictions = model(samples)
+                loss = loss_fn(predictions, labels)
+
+                running_loss += loss.item()
+                num_samples += len(samples)
+
+        test_loss = running_loss / len(dl_test)
+
+        history.log("epoch", epoch, epoch)
+        history.log("loss", train_loss, test_loss)
+
+        print(
+            f"[epoch {epoch}/{epochs}] "
+            f"train_loss: {train_loss:.04f} "
+            f"test_loss: {test_loss:.04f} "
+        )
+
+    return history
+
 def _correct_predicted(
     predicted_labels: torch.Tensor, target_labels: torch.Tensor
 ) -> int:
@@ -31,7 +101,11 @@ def run_training(
 
     model.to(device)
 
-    loss_fn = torch.nn.CrossEntropyLoss()
+    def loss_fn(x):
+        smax = torch.nn.functional.softmax
+        cle = torch.nn.functional.cross_entropy
+        return cle(smax(x, dim=1))
+
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     history = TrainHistory()
 
