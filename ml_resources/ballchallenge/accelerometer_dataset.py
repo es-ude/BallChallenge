@@ -25,6 +25,30 @@ def _load_samples_and_positions(
     return torch.stack(samples), positions
 
 
+class AccelerometerDatasetWithPointLabels(Dataset):
+    def __init__(
+        self,
+        dataset_root: Path,
+        transform_samples: Optional[Callable[[torch.Tensor], torch.Tensor]] = None,
+    ) -> None:
+        super().__init__()
+        self._samples, positions = _load_samples_and_positions(
+            dataset_root=dataset_root,
+            labels_file_name="labels.csv",
+            clipped_sample_length=1000,
+        )
+        self._labels = torch.tensor(positions)
+        if transform_samples is not None:
+            self._samples = transform_samples(self._samples)
+
+    def __len__(self) -> int:
+        return len(self._labels)
+
+    def __getitem__(self, index: Any) -> tuple[torch.Tensor, torch.Tensor]:
+        return self._samples[index], self._labels[index]
+
+
+
 class AccelerometerDataset(Dataset):
     def __init__(
         self,
