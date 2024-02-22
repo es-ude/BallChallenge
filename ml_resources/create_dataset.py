@@ -233,10 +233,11 @@ def main() -> None:
     )
     parser.add_argument("--raw_dataset", type=Path)
     parser.add_argument("--destination", type=Path)
+    parser.add_argument("--calibration_image", type=str, default="Ball Throw Challenge/Measurements_25.01/SensorValues/2024-01-25 12:41:16.593/image.jpg")
     args = parser.parse_args()
 
     extract_samples_and_labels(
-        raw_dataset=args.raw_dataset, destination=args.destination, calibration_image="Ball Throw Challenge/Measurements_25.01/SensorValues/2024-01-25 12:41:16.593/image.jpg"
+        raw_dataset=args.raw_dataset, destination=args.destination, calibration_image=args.calibration_image
     )
 
 
