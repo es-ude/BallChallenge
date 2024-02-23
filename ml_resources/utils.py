@@ -3,7 +3,7 @@ import operator
 from functools import partial, reduce
 from math import sqrt
 from pathlib import Path
-from typing import cast, Optional
+from typing import cast, Optional, Sequence, Callable
 
 import matplotlib.pyplot as plt
 import torch
@@ -52,6 +52,12 @@ def create_heat_map_model(input_shape: tuple[int, int], grid_size: tuple[int, in
     model_builder.add_linear(output_units=grid_size[0] * grid_size[1])
 
     return model_builder.build_model()
+
+
+def bnormed_conv(in_channels, out_channels, kernel_size):
+    return nn.Sequential(nn.Conv1d(in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size),
+                         nn.BatchNorm1d(num_features=out_channels),
+                         nn.Sigmoid())
 
 
 def create_position_model(input_shape: tuple[int, int], kernel_sizes: Sequence[int] = (26, 26, 26), out_channels: Sequence[int]=(3, 3, 3), lin_act: Callable[[], nn.Module] = nn.Hardsigmoid, conv=bnormed_conv, linear_out_features: Sequence[int]=(2,)) -> nn.Module:
