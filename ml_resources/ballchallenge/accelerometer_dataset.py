@@ -25,11 +25,29 @@ def _load_samples_and_positions(
     return torch.stack(samples), positions
 
 
+def make_functions_for_normalizing_and_denormalizing_positions(lower_left_corner: tuple[int, int], upper_right_corner: tuple[int, int]):
+    ll = torch.tensor(lower_left_corner, dtype=torch.float32)
+    ur = torch.tensor(upper_right_corner, dtype=torch.float32)
+    offset = ((ll - ur) / 2).view(1, 2)
+    scale = torch.linalg.norm(ll - ur, ord=2)
+
+    def normalize(positions: torch.Tensor):
+        _offset = torch.repeat_interleave(offset, repeats=positions.size()[0], dim=0)
+        return (positions - _offset) / scale
+
+    def denormalize(positions: torch.Tensor):
+        _offset = torch.repeat_interleave(offset, repeats=positions.size()[0], dim=0)
+        return positions * scale + _offset
+
+    return normalize, denormalize
+
+
 class AccelerometerDatasetWithPointLabels(Dataset):
     def __init__(
         self,
         dataset_root: Path,
         transform_samples: Optional[Callable[[torch.Tensor], torch.Tensor]] = None,
+        transform_labels: Optional[Callable[[torch.Tensor], torch.Tensor]] = None,
     ) -> None:
         super().__init__()
         self._samples, positions = _load_samples_and_positions(
@@ -39,6 +57,8 @@ class AccelerometerDatasetWithPointLabels(Dataset):
         )
         self._samples = self._samples.float()
         self._labels = torch.tensor(positions, dtype=torch.float32)
+        if transform_labels is not None:
+            self._labels = transform_labels(self._labels)
         if transform_samples is not None:
             self._samples = transform_samples(self._samples)
 
@@ -47,7 +67,6 @@ class AccelerometerDatasetWithPointLabels(Dataset):
 
     def __getitem__(self, index: Any) -> tuple[torch.Tensor, torch.Tensor]:
         return self._samples[index], self._labels[index]
-
 
 
 class AccelerometerDataset(Dataset):
