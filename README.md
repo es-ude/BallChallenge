@@ -13,7 +13,7 @@ As an IDE for this project, we recommend using Visual Studio Code (installation 
 ### Get Data
 Download the data from [sciebo](https://udue.de/FEgzS)
 
-Copy/Move the Data to the .data folder 
+Copy/Move the Data to the ./data folder 
 
 On Linux and Mac-OS you can use something like ... (**YOU NEED TO ADAPT THIS**)
 ```bash
