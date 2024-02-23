@@ -1,11 +1,13 @@
 import itertools
-from functools import partial
+import operator
+from functools import partial, reduce
 from math import sqrt
 from pathlib import Path
 from typing import cast, Optional
 
 import matplotlib.pyplot as plt
 import torch
+import torch.nn as nn
 from elasticai.creator.nn import Sequential
 from torch import softmax
 from torch.nn import Sequential as torchSequential
@@ -52,27 +54,32 @@ def create_heat_map_model(input_shape: tuple[int, int], grid_size: tuple[int, in
     return model_builder.build_model()
 
 
-def create_position_model(input_shape: tuple[int, int], kernel_size=64, hidden_channels=1,
-                          num_convs=3) -> torch.nn.Module:
-    act = torch.nn.ReLU
-    flatten = torch.nn.Flatten
-    linear = torch.nn.Linear
+def create_position_model(input_shape: tuple[int, int], kernel_sizes: Sequence[int] = (26, 26, 26), out_channels: Sequence[int]=(3, 3, 3), lin_act: Callable[[], nn.Module] = nn.Hardsigmoid, conv=bnormed_conv, linear_out_features: Sequence[int]=(2,)) -> nn.Module:
     in_length = input_shape[1]
-    in_features = hidden_channels * (in_length + num_convs * (1 - kernel_size))
-    conv = partial(torch.nn.Conv1d, in_channels=hidden_channels, out_channels=hidden_channels, kernel_size=kernel_size)
-    layers: list[torch.nn.Module] = []
-    for i in range(num_convs):
-        if i == 0:
-            layers.append(conv(in_channels=3))
-        else:
-            layers.append(conv())
-        layers.append(torch.nn.BatchNorm1d(hidden_channels))
-        layers.append(act())
-    layers.append(flatten())
-    layers.append(linear(in_features=in_features, out_features=2))
-    layers.append(torch.nn.Tanh())
-    return torchSequential(
-        *tuple(layers)
+    def flatten_linear(in_channels, out_features, kernel_sizes):
+        in_features = in_length
+        for k in kernel_sizes:
+            in_features -= (k - 1)
+        in_features = in_channels * in_features
+        return nn.Sequential(nn.Flatten(), nn.Linear(in_features=in_features, out_features=out_features))
+
+    def _conv(in_channels, out_channels, kernel_size):
+        return conv(in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size)
+    convs = []
+    convs.append(_conv(in_channels=input_shape[0], out_channels=out_channels[0], kernel_size=kernel_sizes[0]))
+    for k, oc, ic in zip(kernel_sizes[1:], out_channels[1:], out_channels[:-1]):
+        convs.append(_conv(in_channels=ic, out_channels=oc, kernel_size=k))
+    total_num_linears = len(linear_out_features)
+    linears = [flatten_linear(in_channels=out_channels[-1], out_features=linear_out_features[0], kernel_sizes=kernel_sizes)]
+    if total_num_linears > 1:
+        linears.extend([nn.BatchNorm1d(linear_out_features[0]), lin_act()])
+    for id, in_features, out_features in zip(range(2, total_num_linears+1), linear_out_features[:-1], linear_out_features[1:]):
+        linears.append(nn.Linear(in_features=in_features, out_features=out_features))
+        if id < total_num_linears:
+            linears.extend([nn.BatchNorm1d(out_features), lin_act()])
+    all_layers = tuple(chain(convs, linears))
+    return nn.Sequential(
+        *all_layers
     )
 
 
@@ -130,9 +137,8 @@ def collect_prediction_target(model, ds):
 
 
 class PositionPrediction:
-    def __init__(self, grid_size: tuple[int, int]):
-        self.grid_size = grid_size
-        self.model : Optional[torch.nn.Module] = None
+    def __init__(self):
+        self.model: Optional[torch.nn.Module] = None
         self.full_set = None
         self.train_set = None
         self.test_set = None
@@ -248,5 +254,51 @@ class PositionPrediction:
         return mean, var
 
 
+def bnormed_conv(in_channels, out_channels, kernel_size, act=nn.Sigmoid):
+        return nn.Sequential(nn.Conv1d(in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size),
+            nn.BatchNorm1d(out_channels),
+                             act()
+            )
 
+
+def run_grid_search(experiment, search_space):
+
+    total_number_of_configurations = reduce(operator.mul, (len(subspace) for subspace in search_space.values()))
+    print("total number of configurations ", total_number_of_configurations)
+
+    def expand_search_space(space):
+        return [dict(zip(space.keys(), combination)) for combination in itertools.product(*tuple(space.values()))]
+
+    tried_configs_and_mean = []
+    best_mean = 2
+    best_model = None
+    trials = 2
+    best_trial_id = 0
+    for id, config in enumerate(expand_search_space(search_space)):
+        for trial in range(trials):
+            print(f"trial {2*id+trial} of {total_number_of_configurations*trials}")
+            experiment.model = create_position_model(
+                input_shape=experiment.input_shape,
+                kernel_sizes=config['conv_setup']['kernel_sizes'],
+                out_channels=config['conv_setup']['out_channels'],
+                lin_act=config['lin_act'],
+                linear_out_features=config['lin_out_features'],
+                conv=partial(bnormed_conv, act=config['conv_act'])
+            )
+            experiment.train(900, quiet=True)
+            mean, var = experiment.get_mean_and_var_distance_for_test()
+            print(mean)
+            print(config)
+
+            if mean < best_mean:
+                print("new best mean distance (meters) ", mean, "best var ", var)
+                print(experiment.model)
+                best_mean = mean
+                best_model = experiment.model
+                best_trial_id = 2*id+trial
+            tried_configs_and_mean.append((config, mean, var))
+    print("done.")
+    print("best model ", best_model)
+    print("best mean ", best_mean)
+    return best_model, best_trial_id
 
