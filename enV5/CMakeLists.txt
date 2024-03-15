@@ -9,7 +9,7 @@ function(make_to_output_file target)
     # create map/bin/hex/uf2 file etc.
     pico_add_uf2_output(${target})
     # move u2f files after build to out directory
-    file(RELATIVE_PATH relative_path ${CMAKE_SOURCE_DIR} ${CMAKE_CURRENT_LIST_DIR})
+    file(RELATIVE_PATH relative_path ${CMAKE_SOURCE_DIR} ..)
     add_custom_command(TARGET ${target} POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy
             ${CMAKE_BINARY_DIR}/${relative_path}/${target}.uf2
