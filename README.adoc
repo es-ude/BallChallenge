@@ -1,0 +1,31 @@
+= BallChallenge
+:toc:
+:toclevels: 3
+:toc-placement!:
+ifdef::env-github[]
+:tip-caption: :bulb:
+:note-caption: :information_source:
+:important-caption: :heavy_exclamation_mark:
+:caution-caption: :fire:
+:warning-caption: :warning:
+endif::[]
+
+toc::[]
+
+== Elastic Node implementations
+
+NOTE: link:enV5/[enV5 folder]
+
+[.lead]
+Provide the implementation for the Elastic Node hardware to be used.
+
+== Cloud Backend
+
+NOTE: link:cloud/[cloud folder]
+
+[.lead]
+Provide the backend cloud side as the communication/service endpoint for the Hardware.
+
+The required tools can be started with the provided link:cloud/docker-compose.yml[docker compose file].
+
+CAUTION: A running MQTT Broker is assumed!
