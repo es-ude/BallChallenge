@@ -49,8 +49,5 @@ After activating the ballchallenge conda environment or any other `python3.11` e
 git clone https://github.com/es-ude/BallChallenge.git
 cd BallChallenge/
 
-# TODO: Decide if this should be merged to main or not
-git checkout explore-data-and-adapt-model
-
 pip install -r requirements.txt
 ```
