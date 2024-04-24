@@ -4,7 +4,7 @@ pyarrow
 matplotlib
 seaborn
 torch
-git+https://github.com/glencoe/elasticai.creator-towards-online-training.git@develop
+git+https://github.com/es-ude/elastic-ai.creator.git@develop
 jupyterlab
 ipykernel
 opencv-python
