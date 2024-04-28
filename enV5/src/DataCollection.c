@@ -1,238 +1,241 @@
+/*!
+ * This implementation intends to provide a sample data collection.
+ * It is intended to be used with the CSV Service as a backend (See README.adoc).
+ */
+
 #define SOURCE_FILE "DATA-COLLECT-APP"
 
 // internal headers
 #include "Adxl345b.h"
 #include "Common.h"
 #include "Esp.h"
-#include "Flash.h"
-#include "FpgaConfigurationHandler.h"
+#include "FreeRtosMutexWrapper.h"
 #include "FreeRtosQueueWrapper.h"
 #include "FreeRtosTaskWrapper.h"
 #include "MqttBroker.h"
 #include "Network.h"
-#include "NetworkConfiguration.h"
+#include "Posting.h"
 #include "Protocol.h"
-#include "Spi.h"
 #include "enV5HwController.h"
 
 // pico-sdk headers
 #include "hardware/i2c.h"
-#include "hardware/spi.h"
 #include "hardware/watchdog.h"
 #include "pico/bootrom.h"
 #include "pico/stdlib.h"
 
 // external headers
-#include <malloc.h>
 #include <string.h>
 
 /* region VARIABLES/DEFINES */
 
-/* region FLASH */
+#define EIP_BASE "eip://uni-due.de/es"
+#define EIP_DEVICE_ID "dataCollect01"
+status_t status = {
+    .id = EIP_DEVICE_ID, .type = "enV5", .state = STATUS_STATE_ONLINE, .data = "g-value,timer"};
 
-spi_t spiToFlash = {.spi = spi0, .baudrate = 5000000, .sckPin = 2, .mosiPin = 3, .misoPin = 0};
-uint8_t flashChipSelectPin = 1;
+const uint8_t batchIntervalInSeconds = 3;
+const uint16_t samplesPerSecond = 400;
 
-/* endregion FLASH */
+typedef enum {
+    DATA_VALUE,
+} pubType_t;
+typedef struct publishRequest {
+    pubType_t pubType;
+    char *topic;
+    char *data;
+} publishRequest_t;
 
-/* region MQTT */
+queue_t receivedPosts;
+queue_t batchRequest;
+queue_t publishRequests;
 
-#define G_VALUE_BATCH_SECONDS 3
-
-bool newBatchAvailable = false;
-bool newBatchRequested = false;
-char *gValueDataBatch;
-char *twinID;
-
-/* endregion MQTT */
+mutex_t espOccupied;
 
 /* endregion VARIABLES/DEFINES */
 
-/* region PROTOTYPES */
+/* region HELPER FUNCTIONS */
 
-/* region HARDWARE */
-
-/// initialize hardware (watchdog, UART, ESP, Wi-Fi, MQTT, I²C, sensors, ...)
-void init(void);
-
-/* endregion HARDWARE */
-
-/* region FreeRTOS TASKS */
-
-void setupTask(void);
-
-_Noreturn void publishValueBatchesTask(void);
-
-_Noreturn void getGValueTask(void);
-
-/* endregion FreeRTOS TASKS */
-
-/* region MQTT */
-
-void publishGValueBatch(char *dataID);
-
-void receiveCsvRequest(__attribute__((unused)) posting_t posting);
-
-/* endregion MQTT */
-
-/* endregion HEADER */
-
-/* region PROTOTYPE IMPLEMENTATIONS */
-
-int main() {
-    init();
-    env5HwLedsAllOn();
-
-    freeRtosTaskWrapperRegisterTask(setupTask, "setupMqtt", 1, FREERTOS_CORE_0);
-    freeRtosTaskWrapperRegisterTask(publishValueBatchesTask, "publishValueBatchesTask", 1,
-                                    FREERTOS_CORE_0);
-    freeRtosTaskWrapperRegisterTask(getGValueTask, "getGValueTask", 1, FREERTOS_CORE_1);
-    freeRtosTaskWrapperStartScheduler();
-}
-
-void init(void) {
-    env5HwLedsInit();
-
-    // check if we crash last time -> reboot into boot rom mode
+static void initialize(void) {
+    // check if we crash last time -> if true, reboot into boot rom mode
     if (watchdog_enable_caused_reboot()) {
         reset_usb_boot(0, 0);
     }
 
-    // init IO
-    stdio_init_all();
-    // waits for usb connection, REMOVE to continue without waiting for connection
-    // while ((!stdio_usb_connected())) {}
-    // initialize ESP over UART
-    espInit();
+    env5HwInit();
 
-    // initialize Wi-Fi and MQTT broker
-    networkTryToConnectToNetworkUntilSuccessful(networkCredentials);
-    mqttBrokerConnectToBrokerUntilSuccessful(mqttHost, "eip://uni-due.de/es", "enV5");
+    // initialize I/O for Debug purposes
+    // stdio_init_all();
+    // while ((!stdio_usb_connected())) { /* wait for serial connection */ }
+
+    espInit(); // initialize Wi-Fi chip
+    networkTryToConnectToNetworkUntilSuccessful();
+    mqttBrokerConnectToBrokerUntilSuccessful(EIP_BASE, EIP_DEVICE_ID);
 
     adxl345bErrorCode_t errorADXL = adxl345bInit(i2c1, ADXL345B_I2C_ALTERNATE_ADDRESS);
     i2c_set_baudrate(i2c1, 2000000);
-    if (errorADXL == ADXL345B_NO_ERROR)
-        PRINT_DEBUG("Initialised ADXL345B.")
-    else
-        PRINT("Initialise ADXL345B failed; adxl345b_ERROR: %02X", errorADXL)
-
-    // initialize FPGA and flash
-    flashInit(&spiToFlash, flashChipSelectPin);
-    env5HwInit();
-    fpgaConfigurationHandlerInitialize();
-
-    // create FreeRTOS task queue
-    freeRtosQueueWrapperCreate();
-
-    // enables watchdog timer (5s)
-    // watchdog_enable(5000, 1);
+    if (errorADXL == ADXL345B_NO_ERROR) {
+        PRINT_DEBUG("Initialised ADXL345B.");
+        adxl345bWriteConfigurationToSensor(ADXL345B_REGISTER_BW_RATE, ADXL345B_BW_RATE_400);
+        adxl345bChangeMeasurementRange(ADXL345B_16G_RANGE);
+    } else {
+        PRINT_DEBUG("Initialise ADXL345B failed; adxl345b_ERROR: %02X", errorADXL);
+        reset_usb_boot(0, 0);
+    }
 }
 
-
-void setupTask(void) {
-    publishAliveStatusMessage("g-value,time");
-    protocolSubscribeForCommand("MEASUREMENTS", (subscriber_t){.deliver = receiveCsvRequest});
-    return;
-}
-
-_Noreturn void getGValueTask(void) {
-    PRINT_DEBUG("START GVALUE TASK")
-
-    newBatchAvailable = false;
-    uint16_t batchSize = 400;
-    uint32_t interval = G_VALUE_BATCH_SECONDS * 1000000;
-
-    gValueDataBatch = malloc(G_VALUE_BATCH_SECONDS * 11 * batchSize * 3 + 16);
-    char *data = malloc(G_VALUE_BATCH_SECONDS * 11 * batchSize * 3 + 16);
-    char timeBuffer[15];
-    adxl345bWriteConfigurationToSensor(ADXL345B_REGISTER_BW_RATE, ADXL345B_BW_RATE_400);
-    adxl345bChangeMeasurementRange(ADXL345B_16G_RANGE);
-
-    uint32_t count;
+_Noreturn void watchdogTask(void) {
+    watchdog_enable(10000, 1); // enables watchdog timer (10s)
 
     while (1) {
-        if (!newBatchRequested) {
-            freeRtosTaskWrapperTaskSleep(100);
-            continue;
+        watchdog_update();                  // watchdog update needs to be performed frequent
+        freeRtosTaskWrapperTaskSleep(1000); // sleep for 1 second
+    }
+}
+
+void deliver(posting_t posting) {
+    freeRtosQueueWrapperPushFromInterrupt(receivedPosts, &posting);
+}
+_Noreturn void handleReceivedPostingsTask(void) {
+    while (1) {
+        posting_t post;
+        if (freeRtosQueueWrapperPop(receivedPosts, &post)) {
+            PRINT_DEBUG("Received Message: '%s' via topic '%s'", post.data, post.topic);
+            if (NULL != strstr(post.topic, EIP_BASE EIP_DEVICE_ID "/DO/MEASUREMENTS")) {
+                freeRtosQueueWrapperPush(batchRequest, NULL);
+                free(post.topic);
+                free(post.data);
+            }
         }
-        newBatchRequested = false;
+        freeRtosTaskWrapperTaskSleep(500);
+    }
+}
 
-        env5HwLedsInit();
-        protocolPublishData("time", "3");
-        gpio_put(GPIO_LED0, 1);
-        freeRtosTaskWrapperTaskSleep(1000);
-        protocolPublishData("time", "2");
-        gpio_put(GPIO_LED1, 1);
-        freeRtosTaskWrapperTaskSleep(1000);
-        protocolPublishData("time", "1");
-        gpio_put(GPIO_LED2, 1);
-        freeRtosTaskWrapperTaskSleep(1000);
-        env5HwLedsAllOff();
-        freeRtosTaskWrapperTaskSleep(250);
-        protocolPublishData("time", "0");
-        env5HwLedsAllOn();
-        freeRtosTaskWrapperTaskSleep(250);
-        env5HwLedsAllOff();
+_Noreturn void handlePublishTask(void) {
+    publishAliveStatusMessageWithMandatoryAttributes(status);
+    protocolSubscribeForCommand("MEASUREMENTS", (subscriber_t){.deliver = deliver});
 
-        strcpy(data, "");
-        count = 0;
-        uint32_t currentTime = time_us_64();
-        uint32_t startTime = time_us_64();
-        while (startTime + interval >= currentTime) {
-            currentTime = time_us_64();
-            if (count >= batchSize * G_VALUE_BATCH_SECONDS)
-                continue;
-            float xAxis, yAxis, zAxis;
-            adxl345bErrorCode_t errorCode = adxl345bReadMeasurements(&xAxis, &yAxis, &zAxis);
-            if (errorCode != ADXL345B_NO_ERROR) {
-                PRINT("ERROR in Measuring G Value!")
-                continue;
+    while (1) {
+        publishRequest_t request;
+        if (freeRtosQueueWrapperPop(publishRequests, &request)) {
+            switch (request.pubType) {
+            case DATA_VALUE:
+                freeRtosMutexWrapperLock(espOccupied);
+                protocolPublishData(request.topic, request.data);
+                freeRtosMutexWrapperUnlock(espOccupied);
+                break;
+            default:
+                PRINT_DEBUG("type NOT valid!");
             }
 
-            char xBuffer[10];
-            char yBuffer[10];
-            char zBuffer[10];
-            snprintf(xBuffer, sizeof(xBuffer), "%.10f", xAxis / 8);
-            snprintf(yBuffer, sizeof(yBuffer), "%.10f", yAxis / 8);
-            snprintf(zBuffer, sizeof(zBuffer), "%.10f", zAxis / 8);
-
-            strcat(data, xBuffer);
-            strcat(data, ",");
-            strcat(data, yBuffer);
-            strcat(data, ",");
-            strcat(data, zBuffer);
-            strcat(data, ";");
-            count += 1;
+            free(request.topic);
+            free(request.data);
         }
-        if (count > 0) {
-            PRINT_DEBUG("COUNT: %lu", count)
-            newBatchAvailable = true;
-            strcpy(gValueDataBatch, data);
+        freeRtosTaskWrapperTaskSleep(500);
+    }
+}
+
+static void showCountdown(void) {
+    env5HwLedsAllOff();
+
+    publishRequest_t pubRequest = {.pubType = DATA_VALUE, .topic = "time", .data = "3"};
+    freeRtosQueueWrapperPush(publishRequests, &pubRequest);
+    gpio_put(GPIO_LED0, 1);
+    freeRtosTaskWrapperTaskSleep(1000);
+
+    pubRequest.data = "2";
+    freeRtosQueueWrapperPush(publishRequests, &pubRequest);
+    gpio_put(GPIO_LED1, 1);
+    freeRtosTaskWrapperTaskSleep(1000);
+
+    pubRequest.data = "1";
+    freeRtosQueueWrapperPush(publishRequests, &pubRequest);
+    gpio_put(GPIO_LED2, 1);
+    freeRtosTaskWrapperTaskSleep(1000);
+
+    env5HwLedsAllOff();
+    freeRtosTaskWrapperTaskSleep(250);
+    pubRequest.data = "0";
+    freeRtosQueueWrapperPush(publishRequests, &pubRequest);
+    env5HwLedsAllOn();
+    freeRtosTaskWrapperTaskSleep(250);
+    env5HwLedsAllOff();
+}
+static bool getSample(uint32_t *timeOfMeasurement, float *xAxis, float *yAxis, float *zAxis) {
+    *timeOfMeasurement = time_us_32();
+
+    adxl345bErrorCode_t errorCode = adxl345bReadMeasurements(xAxis, yAxis, zAxis);
+    if (errorCode != ADXL345B_NO_ERROR) {
+        PRINT_DEBUG("ERROR in Measuring G Value!");
+        return false;
+    }
+    return true;
+}
+static char *appendSample(char *dest, float xAxis, float yAxis, float zAxis) {
+    snprintf(dest, 15, "%13.10f,", xAxis);
+    dest += 14;
+    snprintf(dest, 15, "%13.10f,", yAxis);
+    dest += 14;
+    snprintf(dest, 15, "%13.10f,", zAxis);
+    dest += 14;
+    return dest;
+}
+static char *collectSamples(void) {
+    // axis: 3; char per value: 14B; String Terminator: 1B
+    char *data = calloc(1, batchIntervalInSeconds * samplesPerSecond * 3 * 14 + 1);
+    char *nextEntryStart = data;
+    uint16_t sampleCount = 0;
+    uint32_t limit = time_us_32() + batchIntervalInSeconds * 1000000;
+    uint32_t lastMeasurement = time_us_32();
+
+    while (limit >= time_us_32() && sampleCount >= (samplesPerSecond * batchIntervalInSeconds)) {
+        if (lastMeasurement + (1 / samplesPerSecond) < time_us_32()) {
+            continue;
+        }
+
+        float xAxis, yAxis, zAxis;
+        if (!getSample(&lastMeasurement, &xAxis, &yAxis, &zAxis)) {
+            continue;
+        }
+        nextEntryStart = appendSample(nextEntryStart, xAxis, yAxis, zAxis);
+        sampleCount++;
+    }
+
+    return data;
+}
+static void publishMeasurements(char *data) {
+    if (strlen(data) > 0) {
+        publishRequest_t batchPublish = {.pubType = DATA_VALUE, .topic = "g-value", .data = data};
+        freeRtosQueueWrapperPush(publishRequests, &batchPublish);
+    }
+}
+_Noreturn void recordMeasurementBatch(void) {
+    while (1) {
+        if (freeRtosQueueWrapperPop(batchRequest, NULL)) {
+            showCountdown();
+            char *data = collectSamples();
+            publishMeasurements(data);
         }
     }
 }
 
-_Noreturn void publishValueBatchesTask(void) {
-    PRINT_DEBUG("START BATCH TASK")
+/* endregion HELPER FUNCTIONS */
 
-    while (true) {
-        freeRtosTaskWrapperTaskSleep(100);
-        if (newBatchAvailable) {
-            publishGValueBatch("g-value");
-            newBatchAvailable = false;
-            env5HwLedsAllOn();
-            PRINT_DEBUG("Published G-Values (sec: %lu)", lastPublished)
-        }
-    }
+int main() {
+    initialize();
+
+    receivedPosts = freeRtosQueueWrapperCreate(10, sizeof(posting_t));
+    batchRequest = freeRtosQueueWrapperCreate(5, sizeof(NULL));
+    publishRequests = freeRtosQueueWrapperCreate(10, sizeof(publishRequest_t));
+
+    freeRtosTaskWrapperRegisterTask(watchdogTask, "watchdog", configMAX_PRIORITIES / 2,
+                                    FREERTOS_CORE_0);
+    freeRtosTaskWrapperRegisterTask(handleReceivedPostingsTask, "receiver",
+                                    configMAX_PRIORITIES / 2, FREERTOS_CORE_0);
+    freeRtosTaskWrapperRegisterTask(handlePublishTask, "sender", configMAX_PRIORITIES,
+                                    FREERTOS_CORE_0);
+    freeRtosTaskWrapperRegisterTask(recordMeasurementBatch, "recorder", configMAX_PRIORITIES,
+                                    FREERTOS_CORE_1);
+
+    freeRtosTaskWrapperStartScheduler();
 }
-
-void receiveCsvRequest(__attribute__((unused)) posting_t posting) {
-    newBatchRequested = true;
-    PRINT_DEBUG("Batch requested!")
-}
-
-void publishGValueBatch(char *dataID) {
-    protocolPublishData(dataID, gValueDataBatch);
-}
-
-/* endregion PROTOTYPE IMPLEMENTATIONS */

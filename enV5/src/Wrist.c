@@ -1,3 +1,45 @@
+/*
+ * This implementation is intended to provide FPGA accelerated predictions.
+ * It is intended to be used in combination with Monitor to:
+ *   - Flash the FPGA to the device
+ *   - Show the Results of the prediction
+ *
+ * When the FPGA is flashed successful,
+ * a data recording is triggered and passed as input to the accelerator.
+ * The result of the computation will be published to the topic
+ * "eip://uni-due.de/es/<client_id>/DATA/accelerator/prediction".
+ */
+
+/* FIXME Concept:
+ *   1. Receive Download Request
+ *   2. Copy raw message to queue for message-Task
+ *       a. Parse Message in message-Task
+ *       b. Push Download Request into queue to network-Task
+ *   5. Download binary to flash in network-Task
+ *       a. Download binary to flash
+ *       b. Push request for test execution into queue for test-Task
+ *   8. Execute test in test-Task
+ *       a. Get Test Data from Sensor
+ *       b. Flash FPGA
+ *       c. Send Batch to FPGA
+ *       d. Perform prediction
+ *       e. Push result to queue for network-Task
+ *   9. Publish result in network-Task
+ *
+ *
+ * test queue:
+ * -----------
+ * 5 Elements of: {uint32_t fpgaConfigAddress}
+ *
+ * network queue:
+ * --------------
+ * 5 Elements of: {enum requestType, uint8_t* request}
+ * enum requestType = {DOWNLOAD, PUBLISH}
+ * struct for download request: {char* url, uint32_t configSizeInBytes, uint16_t pageId}
+ * struct for publish request: {char* topic, char* message}
+ * cast request according to requestType!
+ */
+
 #define SOURCE_FILE "WRIST-APP"
 
 // internal headers
@@ -10,7 +52,6 @@
 #include "FreeRtosTaskWrapper.h"
 #include "MqttBroker.h"
 #include "Network.h"
-#include "NetworkConfiguration.h"
 #include "Protocol.h"
 #include "Spi.h"
 #include "enV5HwController.h"
@@ -29,23 +70,22 @@
 
 /* region VARIABLES/DEFINES */
 
-/* region FLASH */
-
 spi_t spiToFlash = {.spi = spi0, .baudrate = 5000000, .sckPin = 2, .mosiPin = 3, .misoPin = 0};
 uint8_t flashChipSelectPin = 1;
 
-/* endregion FLASH */
+status_t status = {
+    .id = "dataCollect01", .type = "enV5", .state = STATUS_STATE_ONLINE, .data = "g-value,timer"};
 
-/* region MQTT */
-
-#define G_VALUE_BATCH_SECONDS 3
-#define G_VALUE_PAUSE_SECONDS 5
-
-bool newBatchAvailable;
-bool newBatchRequested = false;
-char *gValueDataBatch;
 bool subscribed = false;
 char *twinID;
+char *gValueDataBatch;
+
+bool newBatchAvailable = false;
+bool newBatchRequested = false;
+
+const uint8_t batchIntervalInSeconds = 3;
+const uint32_t batchIntervalInMicroSeconds = batchIntervalInSeconds * 1000000;
+const uint16_t samplesPerSecond = 400;
 
 typedef struct downloadRequest {
     char *url;
@@ -54,103 +94,109 @@ typedef struct downloadRequest {
 } downloadRequest_t;
 downloadRequest_t *downloadRequest = NULL;
 
-/* endregion MQTT */
-
 /* endregion VARIABLES/DEFINES */
 
 /* region PROTOTYPES */
 
-/* region HARDWARE */
+static void initialize(void);
 
-/// initialize hardware (watchdog, UART, ESP, WiFi, MQTT, I²C, sensors, ...)
-void init(void);
-
-/* endregion HARDWARE */
-
-/* region FreeRTOS TASKS */
-
-_Noreturn void fpgaTask(void);
-
-_Noreturn void publishValueBatchesTask(void);
-
-/// goes into bootloader mode when 'r' is pressed
-_Noreturn void enterBootModeTask(void);
-
-_Noreturn void getGValueTask(void);
-
-/* endregion FreeRTOS TASKS */
-
-/* region MQTT */
+_Noreturn void watchdogTask(void);
+_Noreturn void messageTask(void);
+_Noreturn void networkTask(void);
+_Noreturn void testTask(void);
 
 void setTwinID(char *newTwinID);
-
 void twinsIsOffline(posting_t posting);
-
 void receiveDataStartRequest(posting_t posting);
-
 void receiveDataStopRequest(__attribute__((unused)) posting_t posting);
-
 void publishGValueBatch(char *dataID);
-
 void receiveDownloadBinRequest(posting_t posting);
-
-/* endregion MQTT */
 
 /* endregion HEADER */
 
-/* region PROTOTYPE IMPLEMENTATIONS */
-
 int main() {
-    init();
-    env5HwLedsAllOn();
+    initialize();
 
-    // freeRtosTaskWrapperRegisterTask(enterBootModeTask, "enterBootModeTask", 5, FREERTOS_CORE_0);
-    freeRtosTaskWrapperRegisterTask(fpgaTask, "fpgaTask", 1, FREERTOS_CORE_0);
-    freeRtosTaskWrapperRegisterTask(publishValueBatchesTask, "publishValueBatchesTask", 1,
-                                    FREERTOS_CORE_0);
-
-    freeRtosTaskWrapperRegisterTask(getGValueTask, "getGValueTask", 1, FREERTOS_CORE_1);
-
+    freeRtosTaskWrapperRegisterTask(watchdogTask, "watchdogTask", 31, FREERTOS_CORE_0);
+    freeRtosTaskWrapperRegisterTask(networkTask, "networkTask", 1, FREERTOS_CORE_0);
+    freeRtosTaskWrapperRegisterTask(testTask, "testTask", 15, FREERTOS_CORE_1);
     freeRtosTaskWrapperStartScheduler();
 }
 
-void init(void) {
-    env5HwLedsInit();
+/* region PROTOTYPE IMPLEMENTATIONS */
 
+void receiveDownloadBinRequest(posting_t posting) {
+    // FIXME:
+    //   Copy message to queue to network Task
+    //   Handle Download in network Task
+
+    // get download request
+    char *urlStart = strstr(posting.data, "URL:") + 4;
+    char *urlEnd = strstr(urlStart, ";") - 1;
+    size_t urlLength = urlEnd - urlStart + 1;
+    char *url = malloc(urlLength);
+    memcpy(url, urlStart, urlLength);
+    url[urlLength - 1] = '\0';
+    char *sizeStart = strstr(posting.data, "SIZE:") + 5;
+    char *endSize = strstr(sizeStart, ";") - 1;
+    size_t length = strtol(sizeStart, &endSize, 10);
+
+    char *positionStart = strstr(posting.data, "POSITION:") + 9;
+    char *positionEnd = strstr(positionStart, ";") - 1;
+    size_t position = strtol(positionStart, &positionEnd, 10);
+
+    downloadRequest = malloc(sizeof(downloadRequest_t));
+    downloadRequest->url = url;
+    downloadRequest->fileSizeInBytes = length;
+    downloadRequest->startAddress = position;
+}
+void initialize(void) {
     // check if we crash last time -> reboot into boot rom mode
     if (watchdog_enable_caused_reboot()) {
         reset_usb_boot(0, 0);
     }
 
+    env5HwInit();
+
     // init IO
     stdio_init_all();
     // waits for usb connection, REMOVE to continue without waiting for connection
     // while ((!stdio_usb_connected())) {}
-    // initialize ESP over UART
-    espInit();
 
-    // initialize WiFi and MQTT broker
-    networkTryToConnectToNetworkUntilSuccessful(networkCredentials);
-    mqttBrokerConnectToBrokerUntilSuccessful(mqttHost, "eip://uni-due.de/es", "enV5");
+    espInit(); // initialize Wi-Fi chip
+    networkTryToConnectToNetworkUntilSuccessful();
+    mqttBrokerConnectToBrokerUntilSuccessful("eip://uni-due.de/es", "enV5");
 
     adxl345bErrorCode_t errorADXL = adxl345bInit(i2c1, ADXL345B_I2C_ALTERNATE_ADDRESS);
     i2c_set_baudrate(i2c1, 2000000);
-    if (errorADXL == ADXL345B_NO_ERROR)
-        PRINT("Initialised ADXL345B.")
-    else
-        PRINT("Initialise ADXL345B failed; adxl345b_ERROR: %02X", errorADXL)
+    if (errorADXL == ADXL345B_NO_ERROR) {
+        PRINT_DEBUG("Initialised ADXL345B.");
+        adxl345bWriteConfigurationToSensor(ADXL345B_REGISTER_BW_RATE, ADXL345B_BW_RATE_400);
+        adxl345bChangeMeasurementRange(ADXL345B_16G_RANGE);
+    } else {
+        PRINT_DEBUG("Initialise ADXL345B failed; adxl345b_ERROR: %02X", errorADXL);
+        reset_usb_boot(0, 0);
+    }
 
-    // initialize FPGA and flash
     flashInit(&spiToFlash, flashChipSelectPin);
-    env5HwInit();
     fpgaConfigurationHandlerInitialize();
 
-    // create FreeRTOS task queue
     freeRtosQueueWrapperCreate();
 
-    // enables watchdog timer (5s)
-    // watchdog_enable(5000, 1);
+    protocolSubscribeForCommand("FLASH", (subscriber_t){.deliver = receiveDownloadBinRequest});
+
+    watchdog_enable(10000, 1); // enables watchdog timer (10s)
 }
+
+_Noreturn void watchdogTask(void) {
+    while (true) {
+        // watchdog update needs to be performed frequent, otherwise the device will crash
+        watchdog_update();
+        freeRtosTaskWrapperTaskSleep(1000);
+    }
+}
+
+_Noreturn void networkTask(void) {}
 
 _Noreturn void getGValueTask(void) {
     newBatchAvailable = false;
@@ -193,8 +239,9 @@ _Noreturn void getGValueTask(void) {
         uint32_t startTime = time_us_64();
         while (startTime + interval >= currentTime) {
             currentTime = time_us_64();
-            if (count >= batchSize * G_VALUE_BATCH_SECONDS)
+            if (count >= batchSize * G_VALUE_BATCH_SECONDS) {
                 continue;
+            }
             float xAxis, yAxis, zAxis;
             adxl345bErrorCode_t errorCode = adxl345bReadMeasurements(&xAxis, &yAxis, &zAxis);
             if (errorCode != ADXL345B_NO_ERROR) {
@@ -294,10 +341,11 @@ void receiveSetSensorFrequency(posting_t posting) {
         PRINT("Frequency exceeds maximum allowed frequency")
         return;
     }
-    if (adxl345bWriteConfigurationToSensor(ADXL345B_REGISTER_BW_RATE, rate) == ADXL345B_NO_ERROR)
+    if (adxl345bWriteConfigurationToSensor(ADXL345B_REGISTER_BW_RATE, rate) == ADXL345B_NO_ERROR) {
         PRINT("Set Frequency successfully")
-    else
+    } else {
         PRINT("ERROR setting Frequency")
+    }
 }
 
 _Noreturn void publishValueBatchesTask(void) {
@@ -333,19 +381,6 @@ _Noreturn void publishValueBatchesTask(void) {
     }
 }
 
-_Noreturn void enterBootModeTask(void) {
-    while (true) {
-        if (getchar_timeout_us(10) == 'r' || !stdio_usb_connected()) {
-            // enter boot mode if 'r' was received
-            reset_usb_boot(0, 0);
-        }
-
-        // watchdog update needs to be performed frequent, otherwise the device will crash
-        watchdog_update();
-        freeRtosTaskWrapperTaskSleep(1000);
-    }
-}
-
 void setTwinID(char *newTwinID) {
     if (newTwinID == twinID) {
         return;
@@ -370,28 +405,6 @@ void twinsIsOffline(posting_t posting) {
 
 void publishGValueBatch(char *dataID) {
     protocolPublishData(dataID, gValueDataBatch);
-}
-
-void receiveDownloadBinRequest(posting_t posting) {
-    // get download request
-    char *urlStart = strstr(posting.data, "URL:") + 4;
-    char *urlEnd = strstr(urlStart, ";") - 1;
-    size_t urlLength = urlEnd - urlStart + 1;
-    char *url = malloc(urlLength);
-    memcpy(url, urlStart, urlLength);
-    url[urlLength - 1] = '\0';
-    char *sizeStart = strstr(posting.data, "SIZE:") + 5;
-    char *endSize = strstr(sizeStart, ";") - 1;
-    size_t length = strtol(sizeStart, &endSize, 10);
-
-    char *positionStart = strstr(posting.data, "POSITION:") + 9;
-    char *positionEnd = strstr(positionStart, ";") - 1;
-    size_t position = strtol(positionStart, &positionEnd, 10);
-
-    downloadRequest = malloc(sizeof(downloadRequest_t));
-    downloadRequest->url = url;
-    downloadRequest->fileSizeInBytes = length;
-    downloadRequest->startAddress = position;
 }
 
 /* endregion PROTOTYPE IMPLEMENTATIONS */
