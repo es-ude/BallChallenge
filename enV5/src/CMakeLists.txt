@@ -3,13 +3,9 @@
 add_executable(data_collection DataCollection.c)
 target_link_libraries(data_collection
         pico_stdlib
-        hardware_i2c
-        hardware_watchdog
-        pico_bootrom
+        freeRtosUtils
         common_lib
         enV5_hwc
-        freeRtosUtils
-        esp_lib
         network_lib
         espBroker_lib
         sensor_lib_adxl345b)
@@ -18,18 +14,17 @@ create_enV5_executable(data_collection)
 ##################################################
 ## region Wrist
 # Target provides FPGA accelerated predictions
-add_executable(wrist Wrist.c)
-target_link_libraries(wrist
+add_executable(nn_test NeuralNetworkTest.c)
+target_link_libraries(nn_test
         pico_stdlib
-        http_lib
         freeRtosUtils
+        common_lib
+        enV5_hwc
         network_lib
         espBroker_lib
-        fpga_configuration_handler
+        http_lib
         flash_lib
-        middleware_lib
-        spi_lib
-        sensor_lib_adxl345b
-        enV5_hwc)
-create_enV5_executable(wrist)
+        fpga_configuration_handler
+        stub_v2_lib)
+create_enV5_executable(nn_test)
 ## endregion Wrist
