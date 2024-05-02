@@ -1,37 +1,52 @@
 # start with: docker compose up -d
 # stop with: docker compose down
 # Sensor Values can be found under ./SensorValues
-# Adjust ip addresses and/or ports
+# Adjust camera ip
 
 services:
+  broker:
+    image: hivemq/hivemq-ce:2023.4
+    restart: always
+    environment:
+      - HIVEMQ_LOG_LEVEL=ERROR
+    networks:
+      - elastic-ai-network
+    ports:
+      - "1883:1883"
+
   monitor:
     image: ghcr.io/es-ude/elastic-ai.cloud.applications.monitor:latest
     restart: always
+    networks:
+      - elastic-ai-network
     ports:
       - "80:80"
     environment:
       - HOST_IP=${HOST_IP}
     command:
       - "--broker-address"
-      - "127.0.0.1"
-      - "--broker-port"
-      - "1883"
+      - "broker"
 
   ball_challenge:
     image: ghcr.io/es-ude/elastic-ai.cloud.applications.ball_challenge:latest
     restart: always
     volumes:
       - ./SensorValues:/SensorValues
+    networks:
+      - elastic-ai-network
     ports:
       - "81:81"
     environment:
       - HOST_IP=${HOST_IP}
     command:
       - "--broker-address"
-      - "127.0.0.1"
-      - "--broker-port"
-      - "1883"
+      - "broker"
       - "--port"
       - "81"
       - "--camera-address"
       - "127.0.0.1"
+
+networks:
+  elastic-ai-network:
+    external: false
+    name: elastic-ai-network
