@@ -12,6 +12,7 @@
 #include "FreeRtosMutexWrapper.h"
 #include "FreeRtosQueueWrapper.h"
 #include "FreeRtosTaskWrapper.h"
+#include "Gpio.h"
 #include "MqttBroker.h"
 #include "Network.h"
 #include "Posting.h"
@@ -65,8 +66,9 @@ static void initialize(void) {
     env5HwInit();
 
     // initialize I/O for Debug purposes
-    // stdio_init_all();
-    // while ((!stdio_usb_connected())) { /* wait for serial connection */ }
+    stdio_init_all();
+    while ((!stdio_usb_connected())) { /* wait for serial connection */
+    }
 
     espInit(); // initialize Wi-Fi chip
     networkTryToConnectToNetworkUntilSuccessful();
@@ -100,12 +102,12 @@ _Noreturn void handleReceivedPostingsTask(void) {
     while (1) {
         posting_t post;
         if (freeRtosQueueWrapperPop(receivedPosts, &post)) {
-            PRINT_DEBUG("Received Message: '%s' via topic '%s'", post.data, post.topic);
-            if (NULL != strstr(post.topic, EIP_BASE EIP_DEVICE_ID "/DO/MEASUREMENTS")) {
+            PRINT("Received Message: '%s' via topic '%s'", post.data, post.topic);
+            if (NULL != strstr(post.topic, "/DO/MEASUREMENTS")) {
                 freeRtosQueueWrapperPush(batchRequest, NULL);
-                free(post.topic);
-                free(post.data);
             }
+            free(post.topic);
+            free(post.data);
         }
         freeRtosTaskWrapperTaskSleep(500);
     }
@@ -118,6 +120,7 @@ _Noreturn void handlePublishTask(void) {
     while (1) {
         publishRequest_t request;
         if (freeRtosQueueWrapperPop(publishRequests, &request)) {
+            PRINT("Publish request of type '%u' to topic '%s'", request.pubType, request.topic);
             switch (request.pubType) {
             case DATA_VALUE:
                 freeRtosMutexWrapperLock(espOccupied);
@@ -138,25 +141,33 @@ _Noreturn void handlePublishTask(void) {
 static void showCountdown(void) {
     env5HwLedsAllOff();
 
-    publishRequest_t pubRequest = {.pubType = DATA_VALUE, .topic = "time", .data = "3"};
-    freeRtosQueueWrapperPush(publishRequests, &pubRequest);
-    gpio_put(GPIO_LED0, 1);
+    publishRequest_t pubRequest3 = {.pubType = DATA_VALUE, .topic = malloc(5), .data = malloc(2)};
+    strcpy(pubRequest3.topic, "time");
+    strcpy(pubRequest3.data, "3");
+    freeRtosQueueWrapperPush(publishRequests, &pubRequest3);
+    gpioSetPin(GPIO_LED0, GPIO_PIN_HIGH);
     freeRtosTaskWrapperTaskSleep(1000);
 
-    pubRequest.data = "2";
-    freeRtosQueueWrapperPush(publishRequests, &pubRequest);
-    gpio_put(GPIO_LED1, 1);
+    publishRequest_t pubRequest2 = {.pubType = DATA_VALUE, .topic = malloc(5), .data = malloc(2)};
+    strcpy(pubRequest2.topic, "time");
+    strcpy(pubRequest2.data, "2");
+    freeRtosQueueWrapperPush(publishRequests, &pubRequest2);
+    gpioSetPin(GPIO_LED1, GPIO_PIN_HIGH);
     freeRtosTaskWrapperTaskSleep(1000);
 
-    pubRequest.data = "1";
-    freeRtosQueueWrapperPush(publishRequests, &pubRequest);
-    gpio_put(GPIO_LED2, 1);
+    publishRequest_t pubRequest1 = {.pubType = DATA_VALUE, .topic = malloc(5), .data = malloc(2)};
+    strcpy(pubRequest1.topic, "time");
+    strcpy(pubRequest1.data, "1");
+    freeRtosQueueWrapperPush(publishRequests, &pubRequest1);
+    gpioSetPin(GPIO_LED2, GPIO_PIN_HIGH);
     freeRtosTaskWrapperTaskSleep(1000);
 
     env5HwLedsAllOff();
     freeRtosTaskWrapperTaskSleep(250);
-    pubRequest.data = "0";
-    freeRtosQueueWrapperPush(publishRequests, &pubRequest);
+    publishRequest_t pubRequest0 = {.pubType = DATA_VALUE, .topic = malloc(5), .data = malloc(2)};
+    strcpy(pubRequest0.topic, "time");
+    strcpy(pubRequest0.data, "0");
+    freeRtosQueueWrapperPush(publishRequests, &pubRequest0);
     env5HwLedsAllOn();
     freeRtosTaskWrapperTaskSleep(250);
     env5HwLedsAllOff();
@@ -181,41 +192,48 @@ static char *appendSample(char *dest, float xAxis, float yAxis, float zAxis) {
     return dest;
 }
 static char *collectSamples(void) {
-    // axis: 3; char per value: 14B; String Terminator: 1B
-    char *data = calloc(1, batchIntervalInSeconds * samplesPerSecond * 3 * 14 + 1);
+    // axis: 3; char per value: 14; String Terminator: 1B
+    char *data = malloc(batchIntervalInSeconds * samplesPerSecond * 3 * 14 + 1);
     char *nextEntryStart = data;
     uint16_t sampleCount = 0;
     uint32_t limit = time_us_32() + batchIntervalInSeconds * 1000000;
     uint32_t lastMeasurement = time_us_32();
 
-    while (limit >= time_us_32() && sampleCount >= (samplesPerSecond * batchIntervalInSeconds)) {
-        if (lastMeasurement + (1 / samplesPerSecond) < time_us_32()) {
+    float xAxis, yAxis, zAxis;
+    while (limit >= time_us_32() && sampleCount <= (samplesPerSecond * batchIntervalInSeconds)) {
+        if (lastMeasurement + (1000000 / samplesPerSecond) < time_us_32()) {
             continue;
         }
 
-        float xAxis, yAxis, zAxis;
+        sleep_ms(1); // IMPORTANT: Has to be there! If deleted won't work!!!
         if (!getSample(&lastMeasurement, &xAxis, &yAxis, &zAxis)) {
             continue;
         }
         nextEntryStart = appendSample(nextEntryStart, xAxis, yAxis, zAxis);
         sampleCount++;
     }
+    PRINT_DEBUG("GOT %u samples", sampleCount);
 
     return data;
 }
 static void publishMeasurements(char *data) {
     if (strlen(data) > 0) {
-        publishRequest_t batchPublish = {.pubType = DATA_VALUE, .topic = "g-value", .data = data};
-        freeRtosQueueWrapperPush(publishRequests, &batchPublish);
+        char *topic = malloc(strlen("g-value") + 1);
+        strcpy(topic, "g-value");
+        publishRequest_t batchToPublish = {.pubType = DATA_VALUE, .topic = topic, .data = data};
+        freeRtosQueueWrapperPush(publishRequests, &batchToPublish);
+    } else {
+        free(data);
     }
 }
-_Noreturn void recordMeasurementBatch(void) {
+_Noreturn void recordMeasurementBatchTask(void) {
     while (1) {
         if (freeRtosQueueWrapperPop(batchRequest, NULL)) {
             showCountdown();
             char *data = collectSamples();
             publishMeasurements(data);
         }
+        freeRtosTaskWrapperTaskSleep(500);
     }
 }
 
@@ -224,9 +242,13 @@ _Noreturn void recordMeasurementBatch(void) {
 int main() {
     initialize();
 
+    env5HwLedsAllOn();
+
     receivedPosts = freeRtosQueueWrapperCreate(10, sizeof(posting_t));
     batchRequest = freeRtosQueueWrapperCreate(5, sizeof(NULL));
     publishRequests = freeRtosQueueWrapperCreate(10, sizeof(publishRequest_t));
+
+    espOccupied = freeRtosMutexWrapperCreate();
 
     freeRtosTaskWrapperRegisterTask(watchdogTask, "watchdog", configMAX_PRIORITIES / 2,
                                     FREERTOS_CORE_0);
@@ -234,7 +256,7 @@ int main() {
                                     configMAX_PRIORITIES / 2, FREERTOS_CORE_0);
     freeRtosTaskWrapperRegisterTask(handlePublishTask, "sender", configMAX_PRIORITIES,
                                     FREERTOS_CORE_0);
-    freeRtosTaskWrapperRegisterTask(recordMeasurementBatch, "recorder", configMAX_PRIORITIES,
+    freeRtosTaskWrapperRegisterTask(recordMeasurementBatchTask, "recorder", configMAX_PRIORITIES,
                                     FREERTOS_CORE_1);
 
     freeRtosTaskWrapperStartScheduler();
