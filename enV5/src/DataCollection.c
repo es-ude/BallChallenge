@@ -103,7 +103,7 @@ _Noreturn void handleReceivedPostingsTask(void) {
         posting_t post;
         if (freeRtosQueueWrapperPop(receivedPosts, &post)) {
             PRINT("Received Message: '%s' via topic '%s'", post.data, post.topic);
-            if (NULL != strstr(post.topic, "/DO/MEASUREMENTS")) {
+            if (NULL != strstr(post.topic, "/DO/MEASUREMENT")) {
                 freeRtosQueueWrapperPush(batchRequest, NULL);
             }
             free(post.topic);
@@ -115,7 +115,7 @@ _Noreturn void handleReceivedPostingsTask(void) {
 
 _Noreturn void handlePublishTask(void) {
     publishAliveStatusMessageWithMandatoryAttributes(status);
-    protocolSubscribeForCommand("MEASUREMENTS", (subscriber_t){.deliver = deliver});
+    protocolSubscribeForCommand("MEASUREMENT", (subscriber_t){.deliver = deliver});
 
     while (1) {
         publishRequest_t request;
