@@ -187,7 +187,7 @@ static char *appendSample(char *dest, float xAxis, float yAxis, float zAxis) {
     dest += 14;
     snprintf(dest, 15, "%13.10f,", yAxis);
     dest += 14;
-    snprintf(dest, 15, "%13.10f,", zAxis);
+    snprintf(dest, 15, "%13.10f\n", zAxis);
     dest += 14;
     return dest;
 }
