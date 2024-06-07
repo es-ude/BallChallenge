@@ -183,11 +183,11 @@ static bool getSample(uint32_t *timeOfMeasurement, float *xAxis, float *yAxis, f
     return true;
 }
 static char *appendSample(char *dest, float xAxis, float yAxis, float zAxis) {
-    snprintf(dest, 15, "%13.10f,", xAxis);
+    snprintf(dest, 15, "%13.9f,", xAxis);
     dest += 14;
-    snprintf(dest, 15, "%13.10f,", yAxis);
+    snprintf(dest, 15, "%13.9f,", yAxis);
     dest += 14;
-    snprintf(dest, 15, "%13.10f\n", zAxis);
+    snprintf(dest, 15, "%13.9f\n", zAxis);
     dest += 14;
     return dest;
 }
