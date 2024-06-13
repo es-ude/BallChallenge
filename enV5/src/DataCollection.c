@@ -169,9 +169,8 @@ static void showCountdown(void) {
     strcpy(pubRequest0.data, "0");
     freeRtosQueueWrapperPush(publishRequests, &pubRequest0);
     env5HwLedsAllOn();
-    freeRtosTaskWrapperTaskSleep(250);
-    env5HwLedsAllOff();
 }
+
 static bool getSample(uint32_t *timeOfMeasurement, float *xAxis, float *yAxis, float *zAxis) {
     *timeOfMeasurement = time_us_32();
 
@@ -182,6 +181,7 @@ static bool getSample(uint32_t *timeOfMeasurement, float *xAxis, float *yAxis, f
     }
     return true;
 }
+
 static char *appendSample(char *dest, float xAxis, float yAxis, float zAxis) {
     snprintf(dest, 15, "%13.9f,", xAxis);
     dest += 14;
@@ -191,6 +191,7 @@ static char *appendSample(char *dest, float xAxis, float yAxis, float zAxis) {
     dest += 14;
     return dest;
 }
+
 static char *collectSamples(void) {
     // axis: 3; char per value: 14; String Terminator: 1B
     char *data = malloc(batchIntervalInSeconds * samplesPerSecond * 3 * 14 + 1);
@@ -216,6 +217,7 @@ static char *collectSamples(void) {
 
     return data;
 }
+
 static void publishMeasurements(char *data) {
     if (strlen(data) > 0) {
         char *topic = malloc(strlen("g-value") + 1);
@@ -226,6 +228,7 @@ static void publishMeasurements(char *data) {
         free(data);
     }
 }
+
 _Noreturn void recordMeasurementBatchTask(void) {
     while (1) {
         if (freeRtosQueueWrapperPop(batchRequest, NULL)) {
