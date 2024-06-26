@@ -32,8 +32,7 @@
 
 #define EIP_BASE "eip://uni-due.de/es"
 #define EIP_DEVICE_ID "dataCollect01"
-status_t status = {
-    .id = EIP_DEVICE_ID, .type = "enV5", .state = STATUS_STATE_ONLINE, .data = "g-value,timer"};
+status_t status = {.data = "g-value,timer"};
 
 const uint8_t batchIntervalInSeconds = 3;
 const uint16_t samplesPerSecond = 400;
@@ -67,8 +66,8 @@ static void initialize(void) {
 
     // initialize I/O for Debug purposes
     stdio_init_all();
-    while ((!stdio_usb_connected())) { /* wait for serial connection */
-    }
+//    while ((!stdio_usb_connected())) { /* wait for serial connection */
+//    }
 
     espInit(); // initialize Wi-Fi chip
     networkTryToConnectToNetworkUntilSuccessful();
@@ -87,6 +86,7 @@ static void initialize(void) {
 }
 
 _Noreturn void watchdogTask(void) {
+    protocolPublishData("test", "watchdog");
     watchdog_enable(10000, 1); // enables watchdog timer (10s)
 
     while (1) {
@@ -98,6 +98,7 @@ _Noreturn void watchdogTask(void) {
 void deliver(posting_t posting) {
     freeRtosQueueWrapperPushFromInterrupt(receivedPosts, &posting);
 }
+
 _Noreturn void handleReceivedPostingsTask(void) {
     while (1) {
         posting_t post;
@@ -168,7 +169,6 @@ static void showCountdown(void) {
     strcpy(pubRequest0.topic, "time");
     strcpy(pubRequest0.data, "0");
     freeRtosQueueWrapperPush(publishRequests, &pubRequest0);
-    env5HwLedsAllOn();
 }
 
 static bool getSample(uint32_t *timeOfMeasurement, float *xAxis, float *yAxis, float *zAxis) {
@@ -235,6 +235,7 @@ _Noreturn void recordMeasurementBatchTask(void) {
             showCountdown();
             char *data = collectSamples();
             publishMeasurements(data);
+            env5HwLedsAllOn();
         }
         freeRtosTaskWrapperTaskSleep(500);
     }
@@ -248,18 +249,18 @@ int main() {
     env5HwLedsAllOn();
 
     receivedPosts = freeRtosQueueWrapperCreate(10, sizeof(posting_t));
-    batchRequest = freeRtosQueueWrapperCreate(5, sizeof(NULL));
+    batchRequest = freeRtosQueueWrapperCreate(5, 0);
     publishRequests = freeRtosQueueWrapperCreate(10, sizeof(publishRequest_t));
 
     espOccupied = freeRtosMutexWrapperCreate();
 
-    freeRtosTaskWrapperRegisterTask(watchdogTask, "watchdog", configMAX_PRIORITIES / 2,
+    freeRtosTaskWrapperRegisterTask(watchdogTask, "watchdog", 1,
                                     FREERTOS_CORE_0);
     freeRtosTaskWrapperRegisterTask(handleReceivedPostingsTask, "receiver",
-                                    configMAX_PRIORITIES / 2, FREERTOS_CORE_0);
-    freeRtosTaskWrapperRegisterTask(handlePublishTask, "sender", configMAX_PRIORITIES,
+                                    1, FREERTOS_CORE_0);
+    freeRtosTaskWrapperRegisterTask(handlePublishTask, "sender", 2,
                                     FREERTOS_CORE_0);
-    freeRtosTaskWrapperRegisterTask(recordMeasurementBatchTask, "recorder", configMAX_PRIORITIES,
+    freeRtosTaskWrapperRegisterTask(recordMeasurementBatchTask, "recorder", 2,
                                     FREERTOS_CORE_1);
 
     freeRtosTaskWrapperStartScheduler();
