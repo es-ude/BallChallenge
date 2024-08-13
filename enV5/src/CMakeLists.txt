@@ -5,7 +5,8 @@ target_link_libraries(data_collection
         pico_stdlib
         freeRtosUtils
         common_lib
-        enV5_hwc
+        enV5_hw_controller
+        enV5_hw_configuration
         network_lib
         espBroker_lib
         sensor_lib_adxl345b)
@@ -19,7 +20,8 @@ target_link_libraries(nn_test
         pico_stdlib
         freeRtosUtils
         common_lib
-        enV5_hwc
+        enV5_hw_configuration
+        enV5_hw_controller
         network_lib
         espBroker_lib
         http_lib

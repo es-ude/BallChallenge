@@ -5,28 +5,31 @@
 
 #define SOURCE_FILE "DATA-COLLECT-APP"
 
+// pico-sdk headers
+#include "hardware/i2c.h"
+#include "hardware/watchdog.h"
+#include "pico/bootrom.h"
+#include "pico/stdio.h"
+#include "pico/stdio_usb.h"
+
+// external headers
+#include <string.h>
+
 // internal headers
 #include "Adxl345b.h"
 #include "Common.h"
+#include "EnV5HwConfiguration.h"
+#include "EnV5HwController.h"
 #include "Esp.h"
 #include "FreeRtosMutexWrapper.h"
 #include "FreeRtosQueueWrapper.h"
 #include "FreeRtosTaskWrapper.h"
 #include "Gpio.h"
+#include "I2c.h"
 #include "MqttBroker.h"
 #include "Network.h"
 #include "Posting.h"
 #include "Protocol.h"
-#include "enV5HwController.h"
-
-// pico-sdk headers
-#include "hardware/i2c.h"
-#include "hardware/watchdog.h"
-#include "pico/bootrom.h"
-#include "pico/stdlib.h"
-
-// external headers
-#include <string.h>
 
 /* region VARIABLES/DEFINES */
 
@@ -52,42 +55,58 @@ queue_t publishRequests;
 
 mutex_t espOccupied;
 
+i2cConfiguration_t i2cBus = {
+    .i2cInstance = I2C_MODULE,
+    .frequency = 2000000,
+    .sclPin = I2C_SCL_PIN,
+    .sdaPin = I2C_SDA_PIN,
+};
+
+adxl345bSensorConfiguration_t sensor = {
+    .i2c_host = ADXL_I2C_MODULE,
+    .i2c_slave_address = ADXL_SLAVE,
+};
+
 /* endregion VARIABLES/DEFINES */
 
 /* region HELPER FUNCTIONS */
 
 static void initialize(void) {
-    // check if we crash last time -> if true, reboot into boot rom mode
+    // check if we crash last time → if true, reboot into boot rom mode
     if (watchdog_enable_caused_reboot()) {
         reset_usb_boot(0, 0);
     }
 
-    env5HwInit();
+    env5HwControllerInit();
 
     // initialize I/O for Debug purposes
+#ifndef NDEBUG
     stdio_init_all();
-//    while ((!stdio_usb_connected())) { /* wait for serial connection */
-//    }
+    while ((!stdio_usb_connected())) {
+        /* wait for serial connection */
+    }
+#endif
 
     espInit(); // initialize Wi-Fi chip
     networkTryToConnectToNetworkUntilSuccessful();
     mqttBrokerConnectToBrokerUntilSuccessful(EIP_BASE, EIP_DEVICE_ID);
 
-    adxl345bErrorCode_t errorADXL = adxl345bInit(i2c1, ADXL345B_I2C_ALTERNATE_ADDRESS);
-    i2c_set_baudrate(i2c1, 2000000);
-    if (errorADXL == ADXL345B_NO_ERROR) {
-        PRINT_DEBUG("Initialised ADXL345B.");
-        adxl345bWriteConfigurationToSensor(ADXL345B_REGISTER_BW_RATE, ADXL345B_BW_RATE_400);
-        adxl345bChangeMeasurementRange(ADXL345B_16G_RANGE);
-    } else {
-        PRINT_DEBUG("Initialise ADXL345B failed; adxl345b_ERROR: %02X", errorADXL);
+    i2cInit(&i2cBus);
+    adxl345bErrorCode_t errorADXL = adxl345bInit(sensor);
+    if (errorADXL != ADXL345B_NO_ERROR) {
+        PRINT("Initialise ADXL345B failed; adxl345b_ERROR: %02X", errorADXL);
         reset_usb_boot(0, 0);
     }
+    PRINT("Initialised ADXL345B");
+
+    adxl345bWriteConfigurationToSensor(sensor, ADXL345B_REGISTER_BW_RATE, ADXL345B_BW_RATE_400);
+    adxl345bChangeMeasurementRange(sensor, ADXL345B_16G_RANGE);
+    PRINT("SET BW_RATE and RANGE");
 }
 
 _Noreturn void watchdogTask(void) {
     protocolPublishData("test", "watchdog");
-    watchdog_enable(10000, 1); // enables watchdog timer (10s)
+    watchdog_enable(10000, 1); // enables watchdog timer (10 seconds)
 
     while (1) {
         watchdog_update();                  // watchdog update needs to be performed frequent
@@ -140,30 +159,30 @@ _Noreturn void handlePublishTask(void) {
 }
 
 static void showCountdown(void) {
-    env5HwLedsAllOff();
+    env5HwControllerLedsAllOff();
 
     publishRequest_t pubRequest3 = {.pubType = DATA_VALUE, .topic = malloc(5), .data = malloc(2)};
     strcpy(pubRequest3.topic, "time");
     strcpy(pubRequest3.data, "3");
     freeRtosQueueWrapperPush(publishRequests, &pubRequest3);
-    gpioSetPin(GPIO_LED0, GPIO_PIN_HIGH);
+    gpioSetPin(LED0_GPIO, GPIO_PIN_HIGH);
     freeRtosTaskWrapperTaskSleep(1000);
 
     publishRequest_t pubRequest2 = {.pubType = DATA_VALUE, .topic = malloc(5), .data = malloc(2)};
     strcpy(pubRequest2.topic, "time");
     strcpy(pubRequest2.data, "2");
     freeRtosQueueWrapperPush(publishRequests, &pubRequest2);
-    gpioSetPin(GPIO_LED1, GPIO_PIN_HIGH);
+    gpioSetPin(LED1_GPIO, GPIO_PIN_HIGH);
     freeRtosTaskWrapperTaskSleep(1000);
 
     publishRequest_t pubRequest1 = {.pubType = DATA_VALUE, .topic = malloc(5), .data = malloc(2)};
     strcpy(pubRequest1.topic, "time");
     strcpy(pubRequest1.data, "1");
     freeRtosQueueWrapperPush(publishRequests, &pubRequest1);
-    gpioSetPin(GPIO_LED2, GPIO_PIN_HIGH);
+    gpioSetPin(LED2_GPIO, GPIO_PIN_HIGH);
     freeRtosTaskWrapperTaskSleep(1000);
 
-    env5HwLedsAllOff();
+    env5HwControllerLedsAllOff();
     freeRtosTaskWrapperTaskSleep(250);
     publishRequest_t pubRequest0 = {.pubType = DATA_VALUE, .topic = malloc(5), .data = malloc(2)};
     strcpy(pubRequest0.topic, "time");
@@ -174,9 +193,9 @@ static void showCountdown(void) {
 static bool getSample(uint32_t *timeOfMeasurement, float *xAxis, float *yAxis, float *zAxis) {
     *timeOfMeasurement = time_us_32();
 
-    adxl345bErrorCode_t errorCode = adxl345bReadMeasurements(xAxis, yAxis, zAxis);
+    adxl345bErrorCode_t errorCode = adxl345bReadMeasurements(sensor, xAxis, yAxis, zAxis);
     if (errorCode != ADXL345B_NO_ERROR) {
-        PRINT_DEBUG("ERROR in Measuring G Value!");
+        PRINT("ERROR in Measuring G Value!");
         return false;
     }
     return true;
@@ -235,7 +254,7 @@ _Noreturn void recordMeasurementBatchTask(void) {
             showCountdown();
             char *data = collectSamples();
             publishMeasurements(data);
-            env5HwLedsAllOn();
+            env5HwControllerLedsAllOn();
         }
         freeRtosTaskWrapperTaskSleep(500);
     }
@@ -246,7 +265,7 @@ _Noreturn void recordMeasurementBatchTask(void) {
 int main() {
     initialize();
 
-    env5HwLedsAllOn();
+    env5HwControllerLedsAllOn();
 
     receivedPosts = freeRtosQueueWrapperCreate(10, sizeof(posting_t));
     batchRequest = freeRtosQueueWrapperCreate(5, 0);
@@ -254,14 +273,10 @@ int main() {
 
     espOccupied = freeRtosMutexWrapperCreate();
 
-    freeRtosTaskWrapperRegisterTask(watchdogTask, "watchdog", 1,
-                                    FREERTOS_CORE_0);
-    freeRtosTaskWrapperRegisterTask(handleReceivedPostingsTask, "receiver",
-                                    1, FREERTOS_CORE_0);
-    freeRtosTaskWrapperRegisterTask(handlePublishTask, "sender", 2,
-                                    FREERTOS_CORE_0);
-    freeRtosTaskWrapperRegisterTask(recordMeasurementBatchTask, "recorder", 2,
-                                    FREERTOS_CORE_1);
+    freeRtosTaskWrapperRegisterTask(watchdogTask, "watchdog", 1, FREERTOS_CORE_0);
+    freeRtosTaskWrapperRegisterTask(handleReceivedPostingsTask, "receiver", 1, FREERTOS_CORE_0);
+    freeRtosTaskWrapperRegisterTask(handlePublishTask, "sender", 2, FREERTOS_CORE_0);
+    freeRtosTaskWrapperRegisterTask(recordMeasurementBatchTask, "recorder", 2, FREERTOS_CORE_1);
 
     freeRtosTaskWrapperStartScheduler();
 }

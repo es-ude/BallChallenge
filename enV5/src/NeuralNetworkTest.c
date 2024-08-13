@@ -1,12 +1,25 @@
 /*!
- * This implementation intends to provide a implementation to test the prediction on the FPGA
+ * This implementation intends to provide an implementation to test the prediction on the FPGA
  * It is intended to be used with the CSV Service as a backend (See README.adoc).
  */
 
 #define SOURCE_FILE "INFERENCE-APP"
 
+// external headers
+#include <string.h>
+
+// pico-sdk headers
+#include "FpgaConfigurationHandler.h"
+#include "hardware/spi.h"
+#include "hardware/watchdog.h"
+#include "pico/bootrom.h"
+#include "pico/stdio.h"
+#include "pico/stdio_usb.h"
+
 // internal headers
 #include "Common.h"
+#include "EnV5HwConfiguration.h"
+#include "EnV5HwController.h"
 #include "Esp.h"
 #include "FreeRtosMutexWrapper.h"
 #include "FreeRtosQueueWrapper.h"
@@ -15,17 +28,7 @@
 #include "Network.h"
 #include "Posting.h"
 #include "Protocol.h"
-#include "enV5HwController.h"
 #include "stub.h"
-
-// pico-sdk headers
-#include "FpgaConfigurationHandler.h"
-#include "hardware/watchdog.h"
-#include "pico/bootrom.h"
-#include "pico/stdlib.h"
-
-// external headers
-#include <string.h>
 
 /* region VARIABLES/DEFINES */
 
@@ -46,7 +49,7 @@ typedef struct publishRequest {
 
 typedef struct downloadRequest {
     char *url;            //!< URL for download via HTTPGet
-    size_t binFileSize;   //!< Size of BIN file in Bytes
+    size_t binFileSize;   //!< Size of a BIN file in Bytes
     uint32_t startSector; //!< Flash Sector ID (Starting with 1)
     uint8_t *hash;        //!< pointer to SHA256 Hash for validation
 } downloadRequest_t;
@@ -64,22 +67,38 @@ queue_t testRequests;
 
 mutex_t espOccupied;
 
+spiConfiguration_t flashSpi = {
+    .spiInstance = FLASH_SPI_MODULE,
+    .baudrate = FLASH_SPI_BAUDRATE,
+    .csPin = FLASH_SPI_CS,
+    .sckPin = FLASH_SPI_CLOCK,
+    .misoPin = FLASH_SPI_MISO,
+    .mosiPin = FLASH_SPI_MOSI,
+};
+flashConfiguration_t flash = {
+    .flashSpiConfiguration = &flashSpi,
+    .flashBytesPerSector = FLASH_BYTES_PER_SECTOR,
+    .flashBytesPerPage = FLASH_BYTES_PER_PAGE,
+};
+
 /* endregion VARIABLES/DEFINES */
 
 /* region HELPER FUNCTIONS */
 
 void initialize(void) {
-    // check if we crash last time -> if true, reboot into boot rom mode
+    // check if we crash last time → if true, reboot into boot rom mode
     if (watchdog_enable_caused_reboot()) {
         reset_usb_boot(0, 0);
     }
 
-    env5HwInit();
+    env5HwControllerInit();
 
     // initialize I/O for Debug purposes
+#ifndef NDEBUG
     stdio_init_all();
     while ((!stdio_usb_connected())) { /* wait for serial connection */
     }
+#endif
 
     espInit(); // initialize Wi-Fi chip
     networkTryToConnectToNetworkUntilSuccessful();
@@ -87,7 +106,7 @@ void initialize(void) {
 }
 
 _Noreturn void watchdogTask(void) {
-    watchdog_enable(10000, 1); // enables watchdog timer (10s)
+    watchdog_enable(10000, 1); // enables watchdog timer (10 seconds)
 
     while (1) {
         watchdog_update();                  // watchdog update needs to be performed frequent
@@ -201,7 +220,7 @@ _Noreturn void handlePublishTask(void) {
 void downloadBinary(downloadRequest_t *request) {
     freeRtosMutexWrapperLock(espOccupied);
     fpgaConfigurationHandlerError_t error = fpgaConfigurationHandlerDownloadConfigurationViaHttp(
-        request->url, request->binFileSize, request->startSector);
+        &flash, request->url, request->binFileSize, request->startSector);
     freeRtosMutexWrapperUnlock(espOccupied);
     free(request->url);
 
@@ -219,7 +238,7 @@ void downloadBinary(downloadRequest_t *request) {
     freeRtosQueueWrapperPush(publishRequests, &downloadDonePosting);
 }
 void executeTest(testRequest_t *request) {
-    env5HwFpgaPowersOn();
+    env5HwControllerFpgaPowersOn();
 
     int8_t *prediction = malloc(2 * sizeof(int8_t));
     modelPredict((int8_t *)request->data, (request->numberOfInputs) * sizeof(float), prediction, 2);
@@ -254,7 +273,7 @@ _Noreturn void handleFpgaTask(void) {
 int main() {
     initialize();
 
-    env5HwLedsAllOn();
+    env5HwControllerLedsAllOn();
 
     receivedPosts = freeRtosQueueWrapperCreate(10, sizeof(posting_t));
     publishRequests = freeRtosQueueWrapperCreate(10, sizeof(publishRequest_t));

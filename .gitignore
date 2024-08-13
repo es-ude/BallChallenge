@@ -2,6 +2,7 @@
 out/
 .idea/
 .tool-versions
+enV5/picotool/picotool*/
 *NetworkConfig.c
 
 # Byte-compiled / optimized / DLL files
