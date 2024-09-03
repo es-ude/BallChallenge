@@ -95,29 +95,33 @@ static void initialize(void) {
     CEXCEPTION_T exception;
     Try {
         bmi323Init(&sensor, &bmiSpi);
+        PRINT_DEBUG("BMI323 Initialized");
 
         bmi323SelfCalibrationResults_t results;
         bmi323PerformGyroscopeSelfCalibration(&sensor, BMI3_SC_OFFSET_EN, BMI3_SC_APPLY_CORR_EN,
                                               &results);
+        PRINT_DEBUG("BMI323 Calibrated");
 
         bmi323InterruptMapping_t interrupts = {0};
         interrupts.acc_drdy_int = BMI323_INTERRUPT_1;
         bmi323SetInterruptMapping(&sensor, interrupts);
+        PRINT_DEBUG("Accelerometer-Data-Read-Interrupt Mapped");
 
         bmi323FeatureConfiguration_t config = {0};
         config.type = BMI323_ACCEL;
         bmi323GetSensorConfiguration(&sensor, BMI323_ACCEL, &config);
-        config.cfg.acc.odr = BMI3_ACC_ODR_200HZ;
+        config.cfg.acc.odr = BMI3_ACC_ODR_400HZ;
         config.cfg.acc.range = BMI3_ACC_16G;
         config.cfg.acc.bwp = BMI3_ACC_BW_ODR_QUARTER;
         config.cfg.acc.avg_num = BMI3_ACC_AVG1;
         config.cfg.acc.acc_mode = BMI3_ACC_MODE_NORMAL;
         bmi323SetSensorConfiguration(&sensor, BMI323_ACCEL, &config);
+        PRINT_DEBUG("BMI323 Accelerometer configured");
 
-        // TODO: Maybe consider axes remapping!
+        // NOTE: Maybe consider axes remapping!
     }
     Catch(exception) {
-        PRINT("Error during BMI323 init occurred: 0x%02X", exception);
+        PRINT_DEBUG("Error during BMI323 init occurred: 0x%02X", exception);
         reset_usb_boot(0, 0);
     }
 }
@@ -140,7 +144,7 @@ _Noreturn void handleReceivedPostingsTask(void) {
     while (1) {
         posting_t post;
         if (freeRtosQueueWrapperPop(receivedPosts, &post)) {
-            PRINT("Received Message: '%s' via topic '%s'", post.data, post.topic);
+            PRINT_DEBUG("Received Message: '%s' via topic '%s'", post.data, post.topic);
             if (NULL != strstr(post.topic, "/DO/MEASUREMENT")) {
                 freeRtosQueueWrapperPush(batchRequest, NULL);
             }
@@ -158,7 +162,8 @@ _Noreturn void handlePublishTask(void) {
     while (1) {
         publishRequest_t request;
         if (freeRtosQueueWrapperPop(publishRequests, &request)) {
-            PRINT("Publish request of type '%u' to topic '%s'", request.pubType, request.topic);
+            PRINT_DEBUG("Publish request of type '%u' to topic '%s'", request.pubType,
+                        request.topic);
             switch (request.pubType) {
             case DATA_VALUE:
                 freeRtosMutexWrapperLock(espOccupied);
@@ -209,18 +214,25 @@ static void showCountdown(void) {
 }
 
 static bool getSample(uint32_t *timeOfMeasurement, float *xAxis, float *yAxis, float *zAxis) {
-    *timeOfMeasurement = time_us_32();
-
     CEXCEPTION_T exception;
     Try {
-        bmi323SensorData_t data = {0};
-        // TODO
+        if (BMI3_INT_STATUS_ACC_DRDY & bmi323GetInterruptStatus(&sensor, BMI323_INTERRUPT_1)) {
+            bmi323SensorData_t data = {0};
+            data.type = BMI323_GYRO;
+            bmi323GetData(&sensor, BMI323_GYRO, &data);
+
+            *timeOfMeasurement = time_us_32();
+            *xAxis = bmi323LsbToMps2(data.sens_data.acc.x, BMI3_ACC_RANGE_16G, sensor.resolution);
+            *yAxis = bmi323LsbToMps2(data.sens_data.acc.y, BMI3_ACC_RANGE_16G, sensor.resolution);
+            *zAxis = bmi323LsbToMps2(data.sens_data.acc.z, BMI3_ACC_RANGE_16G, sensor.resolution);
+            return true;
+        }
+        PRINT_DEBUG("Data not ready");
     }
     Catch(exception) {
-        PRINT("Error during BMI323 init occurred: 0x%02X", exception);
-        return false;
+        PRINT_DEBUG("Error during BMI323 operation occurred: 0x%02X", exception);
     }
-    return true;
+    return false;
 }
 
 static char *appendSample(char *dest, float xAxis, float yAxis, float zAxis) {
@@ -247,7 +259,6 @@ static char *collectSamples(void) {
             continue;
         }
 
-        sleep_ms(1); // IMPORTANT: Has to be there! If deleted won't work!!!
         if (!getSample(&lastMeasurement, &xAxis, &yAxis, &zAxis)) {
             continue;
         }
