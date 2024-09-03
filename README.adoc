@@ -12,6 +12,7 @@ endif::[]
 
 toc::[]
 
+
 == Elastic Node implementations
 
 NOTE: link:enV5/[enV5 folder]
@@ -29,3 +30,54 @@ Provide the backend cloud side as the communication/service endpoint for the Har
 The required tools can be started with the provided link:cloud/docker-compose.yml[docker compose file].
 
 CAUTION: A running MQTT Broker is assumed!
+
+
+== Recommended Environment
+
+=== Dependencies
+
+https://gcc.gnu.org/[GCC]::
+-> C Compiler +
+Can be installed via your local package manager like dnf, apt or brew.
+
+https://cmake.org[CMake]::
+-> Build System +
+Can be installed via your local package manager like dnf, apt or brew.
+
+https://ninja-build.org/[Ninja] [OPTIONAL]::
+-> Build Tool +
+Can be installed via your local package manager like dnf, apt or brew.
+
+https://www.python.org/[Python] [OPTIONAL]::
+-> Python Interpreter +
+Can be installed via your local package manager like dnf, apt or brew. +
+Used for development Server and Pre-commit!
+
+https://nodejs.org/en[Node.js] [OPTIONAL]::
+-> Javascript Runtime +
+Can be installed via your local package manager like dnf, apt or brew. +
+Used for Commitlint hook of Pre-Commit!
+
+=== Pre-Commit [optional]
+
+To ensure our commit guidelines, we recommend using https://commitlint.js.org/#/[Commitlint] in combination with https://pre-commit.com/[Pre-Commit].
+To assure you don't corrupt your system we recommend installing the dependencies inside a https://python.land/virtual-environments/virtualenv#How_to_create_a_Python_venv[virtual environment].
+
+.Installation
+1. Install https://nodejs.org/en[Node.js]
+2. Install Node.js packages from link:../package.json[package.json] with `npm ci`
+1. Create and checkout a virtual Python environment
+2. Install required packages from link:../requirements.txt[requirements.txt]
+3. Run `pre-commit install` to register the provided git hooks
+
+NOTE: Node.js is required for Commitlint!
+
+=== IDE
+
+We recommend using CLion as your IDE, because this is our standard IDE and all necessary configurations are distributed with this repository.
+
+Start Clion and import the repository folder as a new project.
+When CLion has opened the folder and all required tools are installed, the IDE will now initialize the build folder, which holds all cmake generated build files.
+
+To build and execute the unit tests, it is recommended to run the 'All CTest' target with the 'UnitTests' profile!
+
