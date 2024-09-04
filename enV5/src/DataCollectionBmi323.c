@@ -31,6 +31,7 @@
 #include "Network.h"
 #include "Posting.h"
 #include "Protocol.h"
+#include "Spi.h"
 #include "bmi323_defs.h"
 
 /* region VARIABLES/DEFINES */
@@ -94,6 +95,7 @@ static void initialize(void) {
 
     CEXCEPTION_T exception;
     Try {
+        spiInit(&bmiSpi);
         bmi323Init(&sensor, &bmiSpi);
         PRINT_DEBUG("BMI323 Initialized");
 
@@ -102,21 +104,20 @@ static void initialize(void) {
                                               &results);
         PRINT_DEBUG("BMI323 Calibrated");
 
-        bmi323InterruptMapping_t interrupts = {0};
-        interrupts.acc_drdy_int = BMI323_INTERRUPT_1;
+        bmi323FeatureConfiguration_t config[1];
+        config[0].type = BMI323_ACCEL;
+        bmi323GetSensorConfiguration(&sensor, 1, config);
+        config[0].cfg.acc.odr = BMI3_ACC_ODR_400HZ;
+        config[0].cfg.acc.range = BMI3_ACC_16G;
+        config[0].cfg.acc.bwp = BMI3_ACC_BW_ODR_HALF;
+        config[0].cfg.acc.avg_num = BMI3_ACC_AVG1;
+        config[0].cfg.acc.acc_mode = BMI3_ACC_MODE_NORMAL;
+        bmi323SetSensorConfiguration(&sensor, 1, config);
+        PRINT_DEBUG("BMI323 Accelerometer configured");
+
+        bmi323InterruptMapping_t interrupts = {.acc_drdy_int = BMI323_INTERRUPT_1};
         bmi323SetInterruptMapping(&sensor, interrupts);
         PRINT_DEBUG("Accelerometer-Data-Read-Interrupt Mapped");
-
-        bmi323FeatureConfiguration_t config = {0};
-        config.type = BMI323_ACCEL;
-        bmi323GetSensorConfiguration(&sensor, BMI323_ACCEL, &config);
-        config.cfg.acc.odr = BMI3_ACC_ODR_400HZ;
-        config.cfg.acc.range = BMI3_ACC_16G;
-        config.cfg.acc.bwp = BMI3_ACC_BW_ODR_QUARTER;
-        config.cfg.acc.avg_num = BMI3_ACC_AVG1;
-        config.cfg.acc.acc_mode = BMI3_ACC_MODE_NORMAL;
-        bmi323SetSensorConfiguration(&sensor, BMI323_ACCEL, &config);
-        PRINT_DEBUG("BMI323 Accelerometer configured");
 
         // NOTE: Maybe consider axes remapping!
     }
@@ -217,14 +218,19 @@ static bool getSample(uint32_t *timeOfMeasurement, float *xAxis, float *yAxis, f
     CEXCEPTION_T exception;
     Try {
         if (BMI3_INT_STATUS_ACC_DRDY & bmi323GetInterruptStatus(&sensor, BMI323_INTERRUPT_1)) {
-            bmi323SensorData_t data = {0};
-            data.type = BMI323_GYRO;
-            bmi323GetData(&sensor, BMI323_GYRO, &data);
+            PRINT("REACHED");
+            bmi323SensorData_t data[1];
+            data[0].type = BMI323_ACCEL;
+            bmi323GetData(&sensor, 1, data);
 
             *timeOfMeasurement = time_us_32();
-            *xAxis = bmi323LsbToMps2(data.sens_data.acc.x, BMI3_ACC_RANGE_16G, sensor.resolution);
-            *yAxis = bmi323LsbToMps2(data.sens_data.acc.y, BMI3_ACC_RANGE_16G, sensor.resolution);
-            *zAxis = bmi323LsbToMps2(data.sens_data.acc.z, BMI3_ACC_RANGE_16G, sensor.resolution);
+            *xAxis =
+                bmi323LsbToMps2(data[0].sens_data.acc.x, BMI3_ACC_RANGE_16G, sensor.resolution);
+            *yAxis =
+                bmi323LsbToMps2(data[0].sens_data.acc.y, BMI3_ACC_RANGE_16G, sensor.resolution);
+            *zAxis =
+                bmi323LsbToMps2(data[0].sens_data.acc.z, BMI3_ACC_RANGE_16G, sensor.resolution);
+            PRINT("Values: (%f, %f, %f)", *xAxis, *yAxis, *zAxis);
             return true;
         }
         PRINT_DEBUG("Data not ready");
@@ -255,15 +261,10 @@ static char *collectSamples(void) {
 
     float xAxis, yAxis, zAxis;
     while (limit >= time_us_32() && sampleCount <= (samplesPerSecond * batchIntervalInSeconds)) {
-        if (lastMeasurement + (1000000 / samplesPerSecond) < time_us_32()) {
-            continue;
+        if (getSample(&lastMeasurement, &xAxis, &yAxis, &zAxis)) {
+            nextEntryStart = appendSample(nextEntryStart, xAxis, yAxis, zAxis);
+            sampleCount++;
         }
-
-        if (!getSample(&lastMeasurement, &xAxis, &yAxis, &zAxis)) {
-            continue;
-        }
-        nextEntryStart = appendSample(nextEntryStart, xAxis, yAxis, zAxis);
-        sampleCount++;
     }
     PRINT_DEBUG("GOT %u samples", sampleCount);
 
