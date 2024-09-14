@@ -20,6 +20,7 @@
 // internal headers
 #include "Bmi323.h"
 #include "Common.h"
+#include "Configuration.h"
 #include "EnV5HwConfiguration.h"
 #include "EnV5HwController.h"
 #include "Esp.h"
@@ -36,12 +37,10 @@
 
 /* region VARIABLES/DEFINES */
 
-#define EIP_BASE "eip://uni-due.de/es"
-#define EIP_DEVICE_ID "dataCollect01"
-status_t status = {.data = "g-value,timer"};
+status_t status = {.data = ACCELEROMETER_TOPIC "," TIMER_TOPIC};
 
-const uint8_t batchIntervalInSeconds = 3;
-const uint16_t samplesPerSecond = 400;
+const uint8_t batchIntervalInSeconds = BATCH_INTERVALL;
+const uint16_t samplesPerSecond = MEASUREMENT_FREQUENCY;
 
 typedef enum {
     DATA_VALUE,
@@ -128,7 +127,6 @@ static void initialize(void) {
 }
 
 _Noreturn void watchdogTask(void) {
-    protocolPublishData("test", "watchdog");
     watchdog_enable(10000, 1); // enables watchdog timer (10 seconds)
 
     while (1) {
@@ -146,7 +144,7 @@ _Noreturn void handleReceivedPostingsTask(void) {
         posting_t post;
         if (freeRtosQueueWrapperPop(receivedPosts, &post)) {
             PRINT_DEBUG("Received Message: '%s' via topic '%s'", post.data, post.topic);
-            if (NULL != strstr(post.topic, "/DO/MEASUREMENT")) {
+            if (NULL != strstr(post.topic, "/DO/" TRIGGER_TOPIC)) {
                 freeRtosQueueWrapperPush(batchRequest, NULL);
             }
             free(post.topic);
@@ -158,7 +156,7 @@ _Noreturn void handleReceivedPostingsTask(void) {
 
 _Noreturn void handlePublishTask(void) {
     publishAliveStatusMessageWithMandatoryAttributes(status);
-    protocolSubscribeForCommand("MEASUREMENT", (subscriber_t){.deliver = deliver});
+    protocolSubscribeForCommand(TRIGGER_TOPIC, (subscriber_t){.deliver = deliver});
 
     while (1) {
         publishRequest_t request;
@@ -185,22 +183,25 @@ _Noreturn void handlePublishTask(void) {
 static void showCountdown(void) {
     env5HwControllerLedsAllOff();
 
-    publishRequest_t pubRequest3 = {.pubType = DATA_VALUE, .topic = malloc(5), .data = malloc(2)};
-    strcpy(pubRequest3.topic, "time");
+    publishRequest_t pubRequest3 = {
+        .pubType = DATA_VALUE, .topic = malloc(sizeof(TIMER_TOPIC)), .data = malloc(2)};
+    strcpy(pubRequest3.topic, TIMER_TOPIC);
     strcpy(pubRequest3.data, "3");
     freeRtosQueueWrapperPush(publishRequests, &pubRequest3);
     gpioSetPin(LED0_GPIO, GPIO_PIN_HIGH);
     freeRtosTaskWrapperTaskSleep(1000);
 
-    publishRequest_t pubRequest2 = {.pubType = DATA_VALUE, .topic = malloc(5), .data = malloc(2)};
-    strcpy(pubRequest2.topic, "time");
+    publishRequest_t pubRequest2 = {
+        .pubType = DATA_VALUE, .topic = malloc(sizeof(TIMER_TOPIC) + 1), .data = malloc(2)};
+    strcpy(pubRequest2.topic, TIMER_TOPIC);
     strcpy(pubRequest2.data, "2");
     freeRtosQueueWrapperPush(publishRequests, &pubRequest2);
     gpioSetPin(LED1_GPIO, GPIO_PIN_HIGH);
     freeRtosTaskWrapperTaskSleep(1000);
 
-    publishRequest_t pubRequest1 = {.pubType = DATA_VALUE, .topic = malloc(5), .data = malloc(2)};
-    strcpy(pubRequest1.topic, "time");
+    publishRequest_t pubRequest1 = {
+        .pubType = DATA_VALUE, .topic = malloc(sizeof(TIMER_TOPIC) + 1), .data = malloc(2)};
+    strcpy(pubRequest1.topic, TIMER_TOPIC);
     strcpy(pubRequest1.data, "1");
     freeRtosQueueWrapperPush(publishRequests, &pubRequest1);
     gpioSetPin(LED2_GPIO, GPIO_PIN_HIGH);
@@ -208,8 +209,9 @@ static void showCountdown(void) {
 
     env5HwControllerLedsAllOff();
     freeRtosTaskWrapperTaskSleep(250);
-    publishRequest_t pubRequest0 = {.pubType = DATA_VALUE, .topic = malloc(5), .data = malloc(2)};
-    strcpy(pubRequest0.topic, "time");
+    publishRequest_t pubRequest0 = {
+        .pubType = DATA_VALUE, .topic = malloc(sizeof(TIMER_TOPIC) + 1), .data = malloc(2)};
+    strcpy(pubRequest0.topic, TIMER_TOPIC);
     strcpy(pubRequest0.data, "0");
     freeRtosQueueWrapperPush(publishRequests, &pubRequest0);
 }
@@ -218,7 +220,6 @@ static bool getSample(uint32_t *timeOfMeasurement, float *xAxis, float *yAxis, f
     CEXCEPTION_T exception;
     Try {
         if (BMI3_INT_STATUS_ACC_DRDY & bmi323GetInterruptStatus(&sensor, BMI323_INTERRUPT_1)) {
-            PRINT("REACHED");
             bmi323SensorData_t data[1];
             data[0].type = BMI323_ACCEL;
             bmi323GetData(&sensor, 1, data);
@@ -230,7 +231,7 @@ static bool getSample(uint32_t *timeOfMeasurement, float *xAxis, float *yAxis, f
                 bmi323LsbToMps2(data[0].sens_data.acc.y, BMI3_ACC_RANGE_16G, sensor.resolution);
             *zAxis =
                 bmi323LsbToMps2(data[0].sens_data.acc.z, BMI3_ACC_RANGE_16G, sensor.resolution);
-            PRINT("Values: (%f, %f, %f)", *xAxis, *yAxis, *zAxis);
+            PRINT_DEBUG("Values: (%f, %f, %f)", *xAxis, *yAxis, *zAxis);
             return true;
         }
         PRINT_DEBUG("Data not ready");
@@ -273,8 +274,8 @@ static char *collectSamples(void) {
 
 static void publishMeasurements(char *data) {
     if (strlen(data) > 0) {
-        char *topic = malloc(strlen("g-value") + 1);
-        strcpy(topic, "g-value");
+        char *topic = malloc(strlen(ACCELEROMETER_TOPIC) + 1);
+        strcpy(topic, ACCELEROMETER_TOPIC);
         publishRequest_t batchToPublish = {.pubType = DATA_VALUE, .topic = topic, .data = data};
         freeRtosQueueWrapperPush(publishRequests, &batchToPublish);
     } else {
