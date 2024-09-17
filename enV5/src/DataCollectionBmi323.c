@@ -6,6 +6,7 @@
 #define SOURCE_FILE "DATA-COLLECT-APP"
 
 // external headers
+#include <malloc.h>
 #include <string.h>
 
 // pico-sdk headers
@@ -37,10 +38,11 @@
 
 /* region VARIABLES/DEFINES */
 
-status_t status = {.data = ACCELEROMETER_TOPIC "," TIMER_TOPIC};
+status_t status = {.data = TIMER_TOPIC "\\," ACCELEROMETER_TOPIC "\\," GYROSCOPE_TOPIC};
 
 const uint8_t batchIntervalInSeconds = BATCH_INTERVALL;
-const uint16_t samplesPerSecond = MEASUREMENT_FREQUENCY;
+const uint16_t samplesPerSecondAccelerometer = MEASUREMENT_FREQUENCY_ACCELEROMETER;
+const uint16_t samplesPerSecondGyroscope = MEASUREMENT_FREQUENCY_GYROSCOPE;
 
 typedef enum {
     DATA_VALUE,
@@ -103,35 +105,45 @@ static void initialize(void) {
                                               &results);
         PRINT_DEBUG("BMI323 Calibrated");
 
-        bmi323FeatureConfiguration_t config[1];
+        bmi323FeatureConfiguration_t config[2];
         config[0].type = BMI323_ACCEL;
-        bmi323GetSensorConfiguration(&sensor, 1, config);
-        config[0].cfg.acc.odr = BMI3_ACC_ODR_400HZ;
+        config[1].type = BMI323_GYRO;
+        bmi323GetSensorConfiguration(&sensor, 2, config);
+
+        config[0].cfg.acc.odr = BMI3_ACC_ODR_400HZ; // requires 50401B buffer for MQTT message
         config[0].cfg.acc.range = BMI3_ACC_16G;
         config[0].cfg.acc.bwp = BMI3_ACC_BW_ODR_HALF;
         config[0].cfg.acc.avg_num = BMI3_ACC_AVG1;
         config[0].cfg.acc.acc_mode = BMI3_ACC_MODE_NORMAL;
-        bmi323SetSensorConfiguration(&sensor, 1, config);
-        PRINT_DEBUG("BMI323 Accelerometer configured");
 
-        bmi323InterruptMapping_t interrupts = {.acc_drdy_int = BMI323_INTERRUPT_1};
+        config[1].cfg.gyr.odr = BMI3_GYR_ODR_400HZ; // requires 50401B buffer for MQTT message
+        config[1].cfg.gyr.range = BMI3_GYR_RANGE_2000DPS;
+        config[1].cfg.gyr.bwp = BMI3_GYR_BW_ODR_HALF;
+        config[1].cfg.gyr.avg_num = BMI3_GYR_AVG1;
+        config[1].cfg.gyr.gyr_mode = BMI3_GYR_MODE_NORMAL;
+
+        bmi323SetSensorConfiguration(&sensor, 2, config);
+        PRINT_DEBUG("BMI323 configured");
+
+        bmi323InterruptMapping_t interrupts = {.acc_drdy_int = BMI323_INTERRUPT_1,
+                                               .gyr_drdy_int = BMI323_INTERRUPT_1};
         bmi323SetInterruptMapping(&sensor, interrupts);
-        PRINT_DEBUG("Accelerometer-Data-Read-Interrupt Mapped");
+        PRINT_DEBUG("Data-Ready-Interrupt Mapped");
 
         // NOTE: Maybe consider axes remapping!
     }
     Catch(exception) {
-        PRINT_DEBUG("Error during BMI323 init occurred: 0x%02X", exception);
+        PRINT("Error during BMI323 init occurred: 0x%02X", exception);
         reset_usb_boot(0, 0);
     }
 }
 
 _Noreturn void watchdogTask(void) {
-    watchdog_enable(10000, 1); // enables watchdog timer (10 seconds)
+    watchdog_enable(8388, 1);
 
     while (1) {
-        watchdog_update();                  // watchdog update needs to be performed frequent
-        freeRtosTaskWrapperTaskSleep(1000); // sleep for 1 second
+        watchdog_update(); // watchdog update needs to be performed frequent
+        freeRtosTaskWrapperTaskSleep(500);
     }
 }
 
@@ -150,7 +162,7 @@ _Noreturn void handleReceivedPostingsTask(void) {
             free(post.topic);
             free(post.data);
         }
-        freeRtosTaskWrapperTaskSleep(500);
+        freeRtosTaskWrapperTaskSleep(1000);
     }
 }
 
@@ -161,6 +173,7 @@ _Noreturn void handlePublishTask(void) {
     while (1) {
         publishRequest_t request;
         if (freeRtosQueueWrapperPop(publishRequests, &request)) {
+            PRINT("Available MEM: %zu", mallinfo().fordblks);
             PRINT_DEBUG("Publish request of type '%u' to topic '%s'", request.pubType,
                         request.topic);
             switch (request.pubType) {
@@ -170,13 +183,15 @@ _Noreturn void handlePublishTask(void) {
                 freeRtosMutexWrapperUnlock(espOccupied);
                 break;
             default:
-                PRINT_DEBUG("type NOT valid!");
+                PRINT("type NOT valid!");
             }
 
             free(request.topic);
             free(request.data);
+            PRINT("Available MEM: %zu", mallinfo().fordblks);
         }
-        freeRtosTaskWrapperTaskSleep(500);
+
+        freeRtosTaskWrapperTaskSleep(1000);
     }
 }
 
@@ -184,7 +199,7 @@ static void showCountdown(void) {
     env5HwControllerLedsAllOff();
 
     publishRequest_t pubRequest3 = {
-        .pubType = DATA_VALUE, .topic = malloc(sizeof(TIMER_TOPIC)), .data = malloc(2)};
+        .pubType = DATA_VALUE, .topic = malloc(sizeof(TIMER_TOPIC) + 1), .data = malloc(2)};
     strcpy(pubRequest3.topic, TIMER_TOPIC);
     strcpy(pubRequest3.data, "3");
     freeRtosQueueWrapperPush(publishRequests, &pubRequest3);
@@ -216,32 +231,6 @@ static void showCountdown(void) {
     freeRtosQueueWrapperPush(publishRequests, &pubRequest0);
 }
 
-static bool getSample(uint32_t *timeOfMeasurement, float *xAxis, float *yAxis, float *zAxis) {
-    CEXCEPTION_T exception;
-    Try {
-        if (BMI3_INT_STATUS_ACC_DRDY & bmi323GetInterruptStatus(&sensor, BMI323_INTERRUPT_1)) {
-            bmi323SensorData_t data[1];
-            data[0].type = BMI323_ACCEL;
-            bmi323GetData(&sensor, 1, data);
-
-            *timeOfMeasurement = time_us_32();
-            *xAxis =
-                bmi323LsbToMps2(data[0].sens_data.acc.x, BMI3_ACC_RANGE_16G, sensor.resolution);
-            *yAxis =
-                bmi323LsbToMps2(data[0].sens_data.acc.y, BMI3_ACC_RANGE_16G, sensor.resolution);
-            *zAxis =
-                bmi323LsbToMps2(data[0].sens_data.acc.z, BMI3_ACC_RANGE_16G, sensor.resolution);
-            PRINT_DEBUG("Values: (%f, %f, %f)", *xAxis, *yAxis, *zAxis);
-            return true;
-        }
-        PRINT_DEBUG("Data not ready");
-    }
-    Catch(exception) {
-        PRINT_DEBUG("Error during BMI323 operation occurred: 0x%02X", exception);
-    }
-    return false;
-}
-
 static char *appendSample(char *dest, float xAxis, float yAxis, float zAxis) {
     snprintf(dest, 15, "%13.9f,", xAxis);
     dest += 14;
@@ -252,44 +241,109 @@ static char *appendSample(char *dest, float xAxis, float yAxis, float zAxis) {
     return dest;
 }
 
-static char *collectSamples(void) {
-    // axis: 3; char per value: 14; String Terminator: 1B
-    char *data = malloc(batchIntervalInSeconds * samplesPerSecond * 3 * 14 + 1);
-    char *nextEntryStart = data;
-    uint16_t sampleCount = 0;
-    uint32_t limit = time_us_32() + batchIntervalInSeconds * 1000000;
-    uint32_t lastMeasurement = time_us_32();
+static void getAccelerometerSample(float *xAxis, float *yAxis, float *zAxis) {
+    bmi323SensorData_t data[1];
+    data[0].type = BMI323_ACCEL;
+    bmi323GetData(&sensor, 1, data);
 
-    float xAxis, yAxis, zAxis;
-    while (limit >= time_us_32() && sampleCount <= (samplesPerSecond * batchIntervalInSeconds)) {
-        if (getSample(&lastMeasurement, &xAxis, &yAxis, &zAxis)) {
-            nextEntryStart = appendSample(nextEntryStart, xAxis, yAxis, zAxis);
-            sampleCount++;
-        }
-    }
-    PRINT_DEBUG("GOT %u samples", sampleCount);
-
-    return data;
+    *xAxis = bmi323LsbToMps2(data[0].sens_data.acc.x, BMI3_ACC_RANGE_16G, sensor.resolution);
+    *yAxis = bmi323LsbToMps2(data[0].sens_data.acc.y, BMI3_ACC_RANGE_16G, sensor.resolution);
+    *zAxis = bmi323LsbToMps2(data[0].sens_data.acc.z, BMI3_ACC_RANGE_16G, sensor.resolution);
+    PRINT_DEBUG("Values (Accel): (%f, %f, %f)", *xAxis, *yAxis, *zAxis);
 }
 
-static void publishMeasurements(char *data) {
+static void getGyroscopeSample(float *xAxis, float *yAxis, float *zAxis) {
+    bmi323SensorData_t data[1];
+    data[0].type = BMI323_GYRO;
+    bmi323GetData(&sensor, 1, data);
+
+    *xAxis = bmi323LsbToDps(data[0].sens_data.gyr.x, BMI3_GYR_RANGE_2000DPS, sensor.resolution);
+    *yAxis = bmi323LsbToDps(data[0].sens_data.gyr.y, BMI3_GYR_RANGE_2000DPS, sensor.resolution);
+    *zAxis = bmi323LsbToDps(data[0].sens_data.gyr.z, BMI3_GYR_RANGE_2000DPS, sensor.resolution);
+    PRINT_DEBUG("Values (Gyro): (%f, %f, %f)", *xAxis, *yAxis, *zAxis);
+}
+
+static bool getSample(char **accelerometerBuffer, char **gyroscopeBuffer) {
+    CEXCEPTION_T exception;
+    Try {
+        uint16_t interruptRegister = bmi323GetInterruptStatus(&sensor, BMI323_INTERRUPT_1);
+        if (!(interruptRegister & (BMI3_INT_STATUS_GYR_DRDY | BMI3_INT_STATUS_ACC_DRDY))) {
+            PRINT_DEBUG("Data not ready");
+            ExitTry();
+        }
+
+        if (BMI3_INT_STATUS_ACC_DRDY & interruptRegister) {
+            float xAxis, yAxis, zAxis;
+            getAccelerometerSample(&xAxis, &yAxis, &zAxis);
+            *accelerometerBuffer = appendSample(*accelerometerBuffer, xAxis, yAxis, zAxis);
+        }
+
+        if (BMI3_INT_STATUS_GYR_DRDY & interruptRegister) {
+            float xAxis, yAxis, zAxis;
+            getGyroscopeSample(&xAxis, &yAxis, &zAxis);
+            *gyroscopeBuffer = appendSample(*gyroscopeBuffer, xAxis, yAxis, zAxis);
+        }
+        return true;
+    }
+    Catch(exception) {
+        PRINT("Error during BMI323 operation occurred: 0x%02X", exception);
+    }
+    return false;
+}
+
+static void collectSamples(char *dataAccelerometer, char *dataGyroscope) {
+    char *nextEntryAccelerometer = dataAccelerometer;
+    char *nextEntryGyroscope = dataGyroscope;
+
+    uint32_t limit = time_us_32() + batchIntervalInSeconds * 1000000;
+    while (limit >= time_us_32()) {
+        getSample(&nextEntryAccelerometer, &nextEntryGyroscope);
+    }
+}
+
+static void publishMeasurements(char *data, char *type) {
+    PRINT("Data Length: %zu", strlen(data));
     if (strlen(data) > 0) {
-        char *topic = malloc(strlen(ACCELEROMETER_TOPIC) + 1);
-        strcpy(topic, ACCELEROMETER_TOPIC);
-        publishRequest_t batchToPublish = {.pubType = DATA_VALUE, .topic = topic, .data = data};
+        publishRequest_t batchToPublish = {
+            .pubType = DATA_VALUE, .topic = malloc(strlen(type) + 1), .data = data};
+        strcpy(batchToPublish.topic, type);
         freeRtosQueueWrapperPush(publishRequests, &batchToPublish);
     } else {
         free(data);
     }
 }
 
+static char *allocate(size_t samples) {
+    //! Axes * Bits per Value * number of measurements + string terminator
+    return calloc(1, 3 * 14 * samples + 1);
+}
+
 _Noreturn void recordMeasurementBatchTask(void) {
+    char *placeholder = malloc(1000);
+    free(placeholder);
     while (1) {
         if (freeRtosQueueWrapperPop(batchRequest, NULL)) {
             showCountdown();
-            char *data = collectSamples();
-            publishMeasurements(data);
+
+            // number of measurements = duration in seconds * measurements per second
+            char *dataAccelerometer =
+                allocate(batchIntervalInSeconds * samplesPerSecondAccelerometer);
+
+            // number of measurements = duration in seconds * measurements per second
+            char *dataGyroscope = allocate(batchIntervalInSeconds * samplesPerSecondGyroscope);
+
+            collectSamples(dataAccelerometer, dataGyroscope);
+            PRINT("Collected Samples");
+
             env5HwControllerLedsAllOn();
+
+            publishMeasurements(dataAccelerometer, ACCELEROMETER_TOPIC);
+            PRINT("Publish Accelerometer Data");
+
+            publishMeasurements(dataGyroscope, GYROSCOPE_TOPIC);
+            PRINT("Publish Gyroscope Data");
+
+            env5HwControllerLedsAllOff();
         }
         freeRtosTaskWrapperTaskSleep(500);
     }
@@ -301,6 +355,8 @@ int main() {
     initialize();
 
     env5HwControllerLedsAllOn();
+    sleep_ms(500);
+    env5HwControllerLedsAllOff();
 
     receivedPosts = freeRtosQueueWrapperCreate(10, sizeof(posting_t));
     batchRequest = freeRtosQueueWrapperCreate(5, 0);

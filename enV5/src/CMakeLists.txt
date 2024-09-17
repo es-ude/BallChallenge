@@ -17,6 +17,7 @@ target_link_libraries(data_collection_bmi323
         espBroker_lib
         sensor_lib_bmi323
 )
+target_compile_definitions(data_collection_bmi323 PRIVATE PICO_DEBUG_MALLOC=1)
 create_enV5_executable(data_collection_bmi323)
 ## endregion Data Collection BMI323
 ##################################################

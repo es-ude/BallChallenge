@@ -37,7 +37,7 @@
 status_t status = {.data = ACCELEROMETER_TOPIC "," TIMER_TOPIC};
 
 const uint8_t batchIntervalInSeconds = BATCH_INTERVALL;
-const uint16_t samplesPerSecond = MEASUREMENT_FREQUENCY;
+const uint16_t samplesPerSecondAccelerometer = MEASUREMENT_FREQUENCY_ACCELEROMETER;
 
 typedef enum {
     DATA_VALUE,
@@ -215,20 +215,21 @@ static char *appendSample(char *dest, float xAxis, float yAxis, float zAxis) {
 
 static char *collectSamples(void) {
     // axis: 3; char per value: 14; String Terminator: 1B
-    char *data = malloc(batchIntervalInSeconds * samplesPerSecond * 3 * 14 + 1);
+    char *data = malloc(batchIntervalInSeconds * samplesPerSecondAccelerometer * 3 * 14 + 1);
     char *nextEntryStart = data;
     uint16_t sampleCount = 0;
     uint32_t limit = time_us_32() + batchIntervalInSeconds * 1000000;
     uint32_t lastMeasurement = time_us_32();
 
     float xAxis, yAxis, zAxis;
-    while (limit >= time_us_32() && sampleCount <= (samplesPerSecond * batchIntervalInSeconds)) {
-        if (lastMeasurement + (1000000 / samplesPerSecond) < time_us_32()) {
+    while (limit >= time_us_32() &&
+           sampleCount <= (samplesPerSecondAccelerometer * batchIntervalInSeconds)) {
+        if (lastMeasurement + (1000000 / samplesPerSecondAccelerometer) < time_us_32()) {
             continue;
         }
 
         sleep_ms(1); // IMPORTANT: Has to be there! If deleted won't work!!!
-        if (!getSample(&lastMeasurement, &xAxis, &yAxis, &zAxis)) {
+        if (!getSampleAccelerometer(&lastMeasurement, &xAxis, &yAxis, &zAxis)) {
             continue;
         }
         nextEntryStart = appendSample(nextEntryStart, xAxis, yAxis, zAxis);
