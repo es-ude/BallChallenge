@@ -37,8 +37,10 @@
 /* region VARIABLES/DEFINES */
 
 #define EIP_BASE "eip://uni-due.de/es"
-#define EIP_DEVICE_ID "dataCollect01"
-status_t status = {.data = "g-value,timer"};
+#define EIP_DEVICE_ID "data_collect_01"
+#define ACCELEROMETER_TOPIC "accelerometer"
+#define TIMER_TOPIC "timer"
+status_t status = {.data = ACCELEROMETER_TOPIC "," TIMER_TOPIC};
 
 const uint8_t batchIntervalInSeconds = 3;
 const uint16_t samplesPerSecond = 400;
@@ -185,22 +187,25 @@ _Noreturn void handlePublishTask(void) {
 static void showCountdown(void) {
     env5HwControllerLedsAllOff();
 
-    publishRequest_t pubRequest3 = {.pubType = DATA_VALUE, .topic = malloc(5), .data = malloc(2)};
-    strcpy(pubRequest3.topic, "time");
+    publishRequest_t pubRequest3 = {
+        .pubType = DATA_VALUE, .topic = malloc(strlen(TIMER_TOPIC) + 1), .data = malloc(2)};
+    strcpy(pubRequest3.topic, TIMER_TOPIC);
     strcpy(pubRequest3.data, "3");
     freeRtosQueueWrapperPush(publishRequests, &pubRequest3);
     gpioSetPin(LED0_GPIO, GPIO_PIN_HIGH);
     freeRtosTaskWrapperTaskSleep(1000);
 
-    publishRequest_t pubRequest2 = {.pubType = DATA_VALUE, .topic = malloc(5), .data = malloc(2)};
-    strcpy(pubRequest2.topic, "time");
+    publishRequest_t pubRequest2 = {
+        .pubType = DATA_VALUE, .topic = malloc(strlen(TIMER_TOPIC) + 1), .data = malloc(2)};
+    strcpy(pubRequest2.topic, TIMER_TOPIC);
     strcpy(pubRequest2.data, "2");
     freeRtosQueueWrapperPush(publishRequests, &pubRequest2);
     gpioSetPin(LED1_GPIO, GPIO_PIN_HIGH);
     freeRtosTaskWrapperTaskSleep(1000);
 
-    publishRequest_t pubRequest1 = {.pubType = DATA_VALUE, .topic = malloc(5), .data = malloc(2)};
-    strcpy(pubRequest1.topic, "time");
+    publishRequest_t pubRequest1 = {
+        .pubType = DATA_VALUE, .topic = malloc(strlen(TIMER_TOPIC) + 1), .data = malloc(2)};
+    strcpy(pubRequest1.topic, TIMER_TOPIC);
     strcpy(pubRequest1.data, "1");
     freeRtosQueueWrapperPush(publishRequests, &pubRequest1);
     gpioSetPin(LED2_GPIO, GPIO_PIN_HIGH);
@@ -208,8 +213,9 @@ static void showCountdown(void) {
 
     env5HwControllerLedsAllOff();
     freeRtosTaskWrapperTaskSleep(250);
-    publishRequest_t pubRequest0 = {.pubType = DATA_VALUE, .topic = malloc(5), .data = malloc(2)};
-    strcpy(pubRequest0.topic, "time");
+    publishRequest_t pubRequest0 = {
+        .pubType = DATA_VALUE, .topic = malloc(strlen(TIMER_TOPIC) + 1), .data = malloc(2)};
+    strcpy(pubRequest0.topic, TIMER_TOPIC);
     strcpy(pubRequest0.data, "0");
     freeRtosQueueWrapperPush(publishRequests, &pubRequest0);
 }
@@ -273,8 +279,8 @@ static char *collectSamples(void) {
 
 static void publishMeasurements(char *data) {
     if (strlen(data) > 0) {
-        char *topic = malloc(strlen("g-value") + 1);
-        strcpy(topic, "g-value");
+        char *topic = malloc(strlen(ACCELEROMETER_TOPIC) + 1);
+        strcpy(topic, ACCELEROMETER_TOPIC);
         publishRequest_t batchToPublish = {.pubType = DATA_VALUE, .topic = topic, .data = data};
         freeRtosQueueWrapperPush(publishRequests, &batchToPublish);
     } else {
