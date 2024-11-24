@@ -61,13 +61,35 @@ dependencies {
 
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(22)
+        languageVersion = JavaLanguageVersion.of(17)
     }
 }
 
 application {
     group = "de.ude.ies.elastic_ai.ball_challenge"
     mainClass = "de.ude.ies.elastic_ai.BallChallengeApplication"
+}
+
+jib {
+    from{
+        image = "openjdk:17-alpine"
+    }
+    to {
+        image = "ghcr.io/es-ude/elastic-ai.cloud.applications.ball_challenge"
+        tags = setOf("latest", version.toString())
+    }
+    container {
+        mainClass = mainClass
+        creationTime = "USE_CURRENT_TIMESTAMP"
+    }
+    extraDirectories {
+        paths {
+            path {
+                setFrom("src/main/resources")
+                into = "/src/main/resources"
+            }
+        }
+    }
 }
 
 tasks.named<Test>("test") {

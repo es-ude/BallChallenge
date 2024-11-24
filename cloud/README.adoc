@@ -1,0 +1,118 @@
+= Elastic-Node v5
+:toc:
+:toclevels: 3
+:toc-placement!:
+ifdef::env-github[]
+:tip-caption: :bulb:
+:note-caption: :information_source:
+:important-caption: :heavy_exclamation_mark:
+:caution-caption: :fire:
+:warning-caption: :warning:
+endif::[]
+
+toc::[]
+
+[#_setup]
+== Setup
+
+For compiling the project, the required tools are:
+
+- Java Development Kit (JDK) version 22
+- Docker (Container Runtime)
+
+We recommended pre-commit to check that the commit messages align with the conventional commit message standard.
+
+[IMPORTANT]
+====
+.HOST_IP
+[#_host_ip]
+--
+The `elastic-AI.runtime.cloud:monitor` target requires the Host-IP to be addressed.
+The application will retrieve this information from a system environment variable called `HOST_IP`.
+Therefore, it is recommended that you execute
+
+[source,bash]
+----
+# MacOS
+export HOST_IP=$(ipconfig getifaddr en0)
+
+# Linux
+export HOST_IP=$(hostname -I)
+----
+
+before starting the monitor (with docker or locally).
+--
+====
+
+== Tests
+
+Unit tests and integration tests can be executed independently.
+Both use _jacoco_ to finalize the tests with a report that shows the test results and the code coverage.
+The reports can be found in the location `build/reports/` relative to the corresponding build file.
+
+=== Test execution
+
+|===
+| *Command* | *Task*
+
+| `./gradlew :app:test`
+| Run ** all** unit tests
+
+| `./gradlew :app:integrationTest`
+| Run ** all** Integration test
+|===
+
+== Applications
+
+This repository provides the BallChallenge application.
+A specific implementation for the Ball Challenge.
+
+To start the application locally via Gradle run
+
+[source,bash]
+----
+./gradlew :app:bootRun
+----
+
+=== Exit Codes
+
+[cols=">,<"]
+|===
+| Exit Code | Description
+
+|         0 | No error
+|        10 | Argument Parser failed
+|===
+
+== Distribution
+
+[#_build_docker_container]
+=== Build Docker Container
+
+A docker container for can be created with:
+
+[source,bash]
+----
+./gradlew -Pversion=<version_tag> :app:jibDockerBuild
+----
+
+This container can then be used in a docker-compose file or started manually.
+
+=== Run Docker Container
+
+A Container should be run with:
+
+[source,bash]
+----
+docker run \
+    --rm \ #<1>
+    --network=runtime-network \ #<2>
+    --publish 8081:80 \ #<3>
+    --name ballchallenge \ #<4>
+    ghcr.io/es-ude/elastic-ai.cloud.applications.ball_challenge:<tag>
+----
+
+<1> Remove the container after shutdown
+<2> Required to communicate with the docker container running the MQTT broker
+<3> Port mapping for the webserver port, which allows the webinterface to be accessible from your browser (host:container)
+<4> Specify the name of the container
