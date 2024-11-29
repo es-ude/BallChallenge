@@ -1,0 +1,116 @@
+= Elastic-Node v5
+:toc:
+:toclevels: 3
+:toc-placement!:
+ifdef::env-github[]
+:tip-caption: :bulb:
+:note-caption: :information_source:
+:important-caption: :heavy_exclamation_mark:
+:caution-caption: :fire:
+:warning-caption: :warning:
+endif::[]
+
+toc::[]
+
+[#_setup]
+== Setup
+
+For compiling the project, the required tools are:
+
+* gcc (local C compiler)
+* arm-non-eabi-gcc (C compiler for RP2040)
+* CMake (Build Script Generator)
+* Ninja (Build Tool)
+
+We recommended pre-commit to check that the commit messages align with the conventional commit message standard.
+
+NOTE: If you use the CLion IDE as recommended, the build script generation is done by the IDE itself.
+
+If you want to do this by yourself, please refer to <<CMake>>.
+
+To run the FPGA related flash scripts, it is recommended to create a local virtual Python environment and install the tools from the link:bitfile_scripts/requirements.txt[requirements.txt] file.
+
+IMPORTANT: You have to adjust the network/mqtt broker credentials!
+
+[#_cmake]
+== CMake
+
+There are three CMake Profiles provided with the CLion settings:
+*Debug*, *Release*, and *MinSizeRel*.
+These targets differ only in the amount of printed information when the software is executed on an enV5-device.
+
+.Profiles
+[source,bash]
+----
+# Debug profile
+cmake -B build/debug -G Ninja -D CMAKE_BUILD_TYPE=DEBUG -D DEBUG_MODE:BOOL=ON -D REVISION=2
+
+# Release profile
+cmake -B build/release -G Ninja -D CMAKE_BUILD_TYPE=DEBUG -D DEBUG_MODE:BOOL=OFF -D REVISION=2
+
+# MinSizeRel profile
+cmake -B build/minsizerel -G Ninja -D CMAKE_BUILD_TYPE=RELEASE-D DEBUG_MODE:BOOL=OFF -D REVISION=2
+----
+
+The flag `-G Ninja` tells CMake to use Ninja as the build tool.
+If this flag is not passed, CMake will use the default build tool on your machine (mostly Makefiles).
+
+The flag `-D REVISION` tells CMake the hardwareConfiguration to use. We highly recommend using our matching configuration library.
+Not passing the flag will cause a fatal error.
+
+[#_target_pico]
+=== Target Pico
+
+[#_build_all_targets]
+==== Build all Targets
+
+The debug targets can be built by executing:
+
+[source,bash]
+----
+cmake --build <path/to/build/folder> -j 4
+----
+
+The `*.uf2` to flash the enV5 can then be found inside the build folder.
+
+[#_flashing_the_elastic_node_version_5_env5]
+==== Flashing the Elastic Node version 5 (enV5)
+
+. Press and hold `MCU BOOT` on the Elastic Node
+. Press `MCU RST` on the Elastic Node
+. Release `MCU BOOT`
+. Copy the `*.uf2` File to the RPI-RP2 device
+
+[#_cmd_line_output]
+==== CMD line output
+
+If the pico is connected to the local machine the `printf()` statements inside the code will be redirected to the USB and are available as serial port output.
+This output can be read via a serial port reader like screen, minicom or
+https://www.chiark.greenend.org.uk/~sgtatham/putty/latest.html[putty].
+
+The following example shows how to use minicom on a Unix-based system:
+
+[source,bash]
+----
+minicom \
+-b 115200  \ #<1>
+-o \ #<2>
+-D /dev/ttyACM0 #<3>
+----
+
+<1> `-b 115200` -> baud rate for connection
+<2> `-o` -> disable modem initialisation
+<3> `-D /dev/ttyACM0` -> serial port
+
+[IMPORTANT]
+====
+The serial port differs depending on the host machine!
+It can be found via `ls /dev/tty*` (Linux) or `ls /dev/tty.*` (macOS) from the terminal.
+====
+
+[#_debug_output]
+==== Debug Output
+
+To enable enhanced Debug output, add the flag `-D DEBUG_OUTPUT:BOOL=ON`
+to the <<_cmake,CMake Setup call>> (or add it in the CLion CMake options).
+This enables the `PRINT_DEBUG(...)` macro from link:src/common/include/Common.h[Common.h] in all targets.
