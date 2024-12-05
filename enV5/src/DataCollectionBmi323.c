@@ -38,7 +38,9 @@
 
 #define EIP_BASE "eip://uni-due.de/es"
 #define EIP_DEVICE_ID "dataCollect01"
-status_t status = {.data = "g-value,timer"};
+#define TIMER_TOPIC "timer"
+#define ACCELERATION_TOPIC "acceleration"
+status_t status = {.data = TIMER_TOPIC "," ACCELERATION_TOPIC};
 
 const uint8_t batchIntervalInSeconds = 3;
 const uint16_t samplesPerSecond = 400;
@@ -128,8 +130,7 @@ static void initialize(void) {
 }
 
 _Noreturn void watchdogTask(void) {
-    protocolPublishData("test", "watchdog");
-    watchdog_enable(10000, 1); // enables watchdog timer (10 seconds)
+    watchdog_enable(8000, 1); // enables watchdog timer (8 seconds)
 
     while (1) {
         watchdog_update();                  // watchdog update needs to be performed frequent
@@ -185,33 +186,37 @@ _Noreturn void handlePublishTask(void) {
 static void showCountdown(void) {
     env5HwControllerLedsAllOff();
 
-    publishRequest_t pubRequest3 = {.pubType = DATA_VALUE, .topic = malloc(5), .data = malloc(2)};
-    strcpy(pubRequest3.topic, "time");
-    strcpy(pubRequest3.data, "3");
-    freeRtosQueueWrapperPush(publishRequests, &pubRequest3);
+    publishRequest_t pubRequest = {
+        .pubType = DATA_VALUE, .topic = malloc(strlen(TIMER_TOPIC) + 1), .data = malloc(2)};
+    strcpy(pubRequest.topic, TIMER_TOPIC);
+    strcpy(pubRequest.data, "3");
+    freeRtosQueueWrapperPush(publishRequests, &pubRequest);
     gpioSetPin(LED0_GPIO, GPIO_PIN_HIGH);
     freeRtosTaskWrapperTaskSleep(1000);
 
-    publishRequest_t pubRequest2 = {.pubType = DATA_VALUE, .topic = malloc(5), .data = malloc(2)};
-    strcpy(pubRequest2.topic, "time");
-    strcpy(pubRequest2.data, "2");
-    freeRtosQueueWrapperPush(publishRequests, &pubRequest2);
+    pubRequest.topic = malloc(strlen(TIMER_TOPIC) + 1);
+    strcpy(pubRequest.topic, TIMER_TOPIC);
+    pubRequest.data = malloc(2);
+    strcpy(pubRequest.data, "2");
+    freeRtosQueueWrapperPush(publishRequests, &pubRequest);
     gpioSetPin(LED1_GPIO, GPIO_PIN_HIGH);
     freeRtosTaskWrapperTaskSleep(1000);
 
-    publishRequest_t pubRequest1 = {.pubType = DATA_VALUE, .topic = malloc(5), .data = malloc(2)};
-    strcpy(pubRequest1.topic, "time");
-    strcpy(pubRequest1.data, "1");
-    freeRtosQueueWrapperPush(publishRequests, &pubRequest1);
+    pubRequest.topic = malloc(strlen(TIMER_TOPIC) + 1);
+    strcpy(pubRequest.topic, TIMER_TOPIC);
+    pubRequest.data = malloc(2);
+    strcpy(pubRequest.data, "1");
+    freeRtosQueueWrapperPush(publishRequests, &pubRequest);
     gpioSetPin(LED2_GPIO, GPIO_PIN_HIGH);
     freeRtosTaskWrapperTaskSleep(1000);
 
     env5HwControllerLedsAllOff();
     freeRtosTaskWrapperTaskSleep(250);
-    publishRequest_t pubRequest0 = {.pubType = DATA_VALUE, .topic = malloc(5), .data = malloc(2)};
-    strcpy(pubRequest0.topic, "time");
-    strcpy(pubRequest0.data, "0");
-    freeRtosQueueWrapperPush(publishRequests, &pubRequest0);
+    pubRequest.topic = malloc(strlen(TIMER_TOPIC) + 1);
+    strcpy(pubRequest.topic, "time");
+    pubRequest.data = malloc(2);
+    strcpy(pubRequest.data, "0");
+    freeRtosQueueWrapperPush(publishRequests, &pubRequest);
 }
 
 static bool getSample(uint32_t *timeOfMeasurement, float *xAxis, float *yAxis, float *zAxis) {
@@ -273,8 +278,8 @@ static char *collectSamples(void) {
 
 static void publishMeasurements(char *data) {
     if (strlen(data) > 0) {
-        char *topic = malloc(strlen("g-value") + 1);
-        strcpy(topic, "g-value");
+        char *topic = malloc(strlen(ACCELERATION_TOPIC) + 1);
+        strcpy(topic, ACCELERATION_TOPIC);
         publishRequest_t batchToPublish = {.pubType = DATA_VALUE, .topic = topic, .data = data};
         freeRtosQueueWrapperPush(publishRequests, &batchToPublish);
     } else {
