@@ -1,0 +1,46 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 21,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "base",
+      "generator": "Ninja",
+      "hidden": true,
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "REVISION": "2"
+      }
+    },
+    {
+      "name": "DEBUG",
+      "inherits": ["base"],
+      "binaryDir": "build/debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "DEBUG_OUTPUT": "ON"
+      }
+    },
+    {
+      "name": "MINDEBUG",
+      "inherits": ["base"],
+      "binaryDir": "build/min-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "DEBUG_OUTPUT": "ON"
+      }
+    },
+    {
+      "name": "RELEASE",
+      "inherits": ["base"],
+      "binaryDir": "build/release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "MinSizeRel",
+        "DEBUG_OUTPUT": "OFF"
+      }
+    }
+  ]
+}

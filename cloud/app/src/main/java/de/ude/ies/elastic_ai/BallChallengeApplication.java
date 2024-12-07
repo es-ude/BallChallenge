@@ -17,11 +17,13 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 @SpringBootApplication
 public class BallChallengeApplication {
 
+    public static String HOST_IP;
+    public static Integer PORT;
     private static final String MQTT_DOMAIN = "eip://uni-due.de/es";
     public static String BROKER_IP = null;
     public static Integer BROKER_PORT = null;
-    public static String HOST_IP;
-    public static Integer PORT;
+    public static String CAMERA_IP = null;
+    public static Integer CAMERA_PORT = null;
     public static BallChallengeEndpoint ballChallengeEndpoint = null;
 
     public static void main(String[] args) {
@@ -41,18 +43,8 @@ public class BallChallengeApplication {
             BROKER_IP = arguments.getString("broker_address");
             BROKER_PORT = arguments.getInt("broker_port");
             PORT = arguments.getInt("port");
-        } catch (ArgumentParserException exception) {
-            System.out.println(exception.getMessage());
-            System.exit(10);
-        }
-
-        String CAMERA_IP = null;
-        Integer CAMERA_PORT = null;
-        try {
-            Namespace arguments = parseCameraArguments(args);
             CAMERA_IP = arguments.getString("camera_address");
-            System.out.println(CAMERA_IP);
-            CAMERA_PORT = Integer.parseInt(arguments.getString("camera_port"));
+            CAMERA_PORT = arguments.getInt("camera_port");
         } catch (ArgumentParserException exception) {
             System.out.println(exception.getMessage());
             System.exit(10);
@@ -69,22 +61,23 @@ public class BallChallengeApplication {
     }
 
     static Namespace parseArguments(String[] args) throws ArgumentParserException {
-        ArgumentParser parser = ArgumentParsers.newFor("elastic-ai.runtime.monitor")
+        ArgumentParser parser = ArgumentParsers.newFor("ball-challenge")
             .build()
             .defaultHelp(true)
-            .description("Service for monitoring clients in the elastic-ai.runtime");
-        parseBrokerArguments(parser);
+            .description("Service for controlling the wrist band to collect data-samples");
         parsePort(parser);
+        parseBrokerArguments(parser);
+        parseCameraArguments(parser);
         return parser.parseKnownArgs(args, null);
     }
 
     private static void parsePort(ArgumentParser parser) {
-        ArgumentGroup brokerSpecification = parser.addArgumentGroup("MQTT Broker Specification");
+        ArgumentGroup brokerSpecification = parser.addArgumentGroup("Web Frontend Specification");
 
         brokerSpecification
             .addArgument("--port")
+            .help("Port to publish website")
             .type(Integer.class)
-            .help("Website Port")
             .setDefault(80);
     }
 
@@ -93,29 +86,25 @@ public class BallChallengeApplication {
 
         brokerSpecification
             .addArgument("--broker-address")
-            .help("Broker Address")
+            .help("IP Address of the MQTT Broker")
             .setDefault("localhost");
         brokerSpecification
             .addArgument("--broker-port")
             .type(Integer.class)
-            .help("Broker Port")
+            .help("Port of the MQTT Broker")
             .setDefault(1883);
     }
 
-    private static Namespace parseCameraArguments(String[] args) throws ArgumentParserException {
-        ArgumentParser parser = ArgumentParsers.newFor(
-            "elastic-ai.runtime.applications.ballChallenge"
-        )
-            .build()
-            .defaultHelp(true)
-            .description("Start a BallChallenge Application for the elastic-ai.runtime");
+    private static void parseCameraArguments(ArgumentParser parser) {
         ArgumentGroup cameraSpecification = parser.addArgumentGroup("Camera Specification");
         cameraSpecification
             .addArgument("--camera-address")
-            .help("Camera Address")
+            .help("IP address to connect to webcam")
             .setDefault("localhost");
-        cameraSpecification.addArgument("--camera-port").help("Camera Port").setDefault(8081);
-
-        return parser.parseKnownArgs(args, null);
+        cameraSpecification
+            .addArgument("--camera-port")
+            .help("Port to connect to Camera")
+            .type(Integer.class)
+            .setDefault(8081);
     }
 }

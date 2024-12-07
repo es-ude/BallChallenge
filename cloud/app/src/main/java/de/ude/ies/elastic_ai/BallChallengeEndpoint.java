@@ -86,13 +86,13 @@ public class BallChallengeEndpoint extends LocalCommunicationEndpoint {
         enV5.bindToCommunicationEndpoint(broker);
         dataRequesterAccelerometer = new DataRequester(
             enV5,
-            "accelerometer",
+            "acceleration",
             getDomainAndIdentifier()
         );
         dataRequesterAccelerometer.setDataReceiveFunction(handleThrowData());
         dataRequesterAccelerometer.listenToData(true);
 
-        dataRequesterTime = new DataRequester(enV5, "time", getDomainAndIdentifier());
+        dataRequesterTime = new DataRequester(enV5, "timer", getDomainAndIdentifier());
         dataRequesterTime.setDataReceiveFunction(data -> lastTime = data);
         dataRequesterTime.listenToData(true);
     }
