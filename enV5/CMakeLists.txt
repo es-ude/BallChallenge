@@ -12,6 +12,7 @@ message(NOTICE "INFO: Building for enV5 hardware (Type: ${CMAKE_BUILD_TYPE})")
 set(PICO_SDK_FETCH_FROM_GIT on)
 set(PICO_BOARD none)
 set(PICO_PLATFORM rp2040)
+set(PICOTOOL_FORCE_FETCH_FROM_GIT on)
 set(PICOTOOL_FETCH_FROM_GIT_PATH ${CMAKE_SOURCE_DIR}/picotool)
 
 include(pico_sdk_import.cmake)

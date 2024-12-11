@@ -23,7 +23,7 @@ services:
     volumes:
       - ./SensorValues:/SensorValues
     ports:
-      - "81:81"
+      - "81:80"
     environment:
       - HOST_IP=${HOST_IP}
     command:
@@ -31,7 +31,5 @@ services:
       - "127.0.0.1"
       - "--broker-port"
       - "1883"
-      - "--port"
-      - "81"
       - "--camera-address"
       - "127.0.0.1"
