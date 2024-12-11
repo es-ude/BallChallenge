@@ -36,6 +36,8 @@ jobs:
           username: ${{ github.actor  }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build BallChallenge Image
-        run: ./gradlew -Pversion=${{ steps.release.outputs.tag}} :app:jibDockerBuild
+        working-directory: ./cloud
+        run: |
+          ./gradlew -Pversion=${{ steps.release.outputs.tag}} :app:jibDockerBuild
       - name: Push Image to Github Container Registry
         run: docker push --all-tags ghcr.io/es-ude/elastic-ai.cloud.applications.ball_challenge
