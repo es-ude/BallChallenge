@@ -9,6 +9,25 @@ permissions:
   contents: read
 
 jobs:
+  bootJar:
+    name: Generate boot-Jar-Archive
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+      - name: Build bootJar
+        working-directory: ./cloud
+        run: |
+          ./gradlew :app:bootJar
+      - name: Upload a Jar Archive
+        uses: actions/upload-artifact@v4.4.3
+        with:
+          name: spring-app
+          path: cloud/app/build/libs/ballchallenge.jar
+          overwrite: true
+
   release:
     name: Generate Release
     runs-on: ubuntu-latest

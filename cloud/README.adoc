@@ -17,20 +17,48 @@ endif::[]
 
 toc::[]
 
-[#_setup]
-== Setup
+== Run Container Image
+
+A Container should be run with:
+
+[source,bash]
+----
+docker run \
+    --rm \ #<1>
+    --network=runtime-network \ #<2>
+    --publish 8081:80 \ #<3>
+    --name ballchallenge \ #<4>
+    --env PUBLIC_IP=$(hostname -I) \ #<5>
+    --env BROKER_PORT=1883 \ #<5>
+    --env BROKER_IP=127.0.0.1 \ #<5>
+    --env CAMERA_PORT=8888 \ #<5>
+    --env CAMERA_IP=127.0.0.1 \ #<5>
+    ghcr.io/es-ude/elastic-ai.cloud.applications.ball_challenge:<tag>
+----
+
+<1> Remove the container after shutdown
+<2> Required to communicate with the docker container running the MQTT broker
+<3> Port mapping for the webserver port, which allows the webinterface to be accessible from your browser (host:container)
+<4> Specify the name of the container
+<5> Set Variables for the app
+
+TIP: To ease your usage of the container it is recommended to provide an environment file instead of add each variable as a parameter.
+
+NOTE: An example compose file is provided under link:compose.yml[].
+
+== Development
+
+=== Setup
 
 For compiling the project, no additional tools are required.
 
 We recommended pre-commit to check that the commit messages align with the conventional commit message standard.
 
-== Tests
+=== Tests
 
 Unit tests and integration tests can be executed independently.
 Both use _jacoco_ to finalize the tests with a report that shows the test results and the code coverage.
 The reports can be found in the location `build/reports/` relative to the corresponding build file.
-
-=== Test execution
 
 |===
 | *Command* | *Task*
@@ -42,12 +70,11 @@ The reports can be found in the location `build/reports/` relative to the corres
 | Run ** all** Integration test
 |===
 
-== Applications
+=== Local Execution
 
 This repository provides the BallChallenge application.
 A specific implementation for the Ball Challenge.
-
-To start the application locally via Gradle run
+To start the application locally via Gradle run:
 
 .bootRun
 [[boot_run]]
@@ -76,41 +103,15 @@ SPRING_PROFILES_ACTIVE=<profile> ... ./gradlew ...
 ----
 ====
 
-== Distribution
+=== Build Container Image
 
-[#_build_docker_container]
-=== Build Docker Container
+A container image can be created with:
 
-A docker container for can be created with:
-
+.build image
 [source,bash]
 ----
-./gradlew -Pversion=<version_tag> :app:jibDockerBuild
+docker build -f Dockerfile -t ghcr.io/es-ude/ballchallgne:develop
 ----
 
-This container can then be used in a docker-compose file or started manually.
+This container can then be used in a docker-compose file or started manually as described in <<run-container-image>>
 
-=== Run Docker Container
-
-A Container should be run with:
-
-[source,bash]
-----
-docker run \
-    --rm \ #<1>
-    --network=runtime-network \ #<2>
-    --publish 8081:80 \ #<3>
-    --name ballchallenge \ #<4>
-    --env PUBLIC_IP=$(hostname -I) \ #<5>
-    --env BROKER_PORT=1883 \ #<5>
-    --env BROKER_IP=127.0.0.1 \ #<5>
-    --env CAMERA_PORT=8888 \ #<5>
-    --env CAMERA_IP=127.0.0.1 \ #<5>
-    ghcr.io/es-ude/elastic-ai.cloud.applications.ball_challenge:<tag>
-----
-
-<1> Remove the container after shutdown
-<2> Required to communicate with the docker container running the MQTT broker
-<3> Port mapping for the webserver port, which allows the webinterface to be accessible from your browser (host:container)
-<4> Specify the name of the container
-<5> Set Variables for the app

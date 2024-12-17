@@ -8,8 +8,6 @@ plugins {
 
     id("org.springframework.boot") version "3.3.5"
     id("io.spring.dependency-management") version "1.1.6"
-
-    id("com.google.cloud.tools.jib") version "3.4.4"
 }
 
 repositories {
@@ -70,26 +68,8 @@ application {
     mainClass = "de.ude.ies.elastic_ai.BallChallengeApplication"
 }
 
-jib {
-    from{
-        image = "openjdk:17-alpine"
-    }
-    to {
-        image = "ghcr.io/es-ude/elastic-ai.cloud.applications.ball_challenge"
-        tags = setOf("latest", version.toString())
-    }
-    container {
-        mainClass = mainClass
-        creationTime = "USE_CURRENT_TIMESTAMP"
-    }
-    extraDirectories {
-        paths {
-            path {
-                setFrom("src/main/resources")
-                into = "/src/main/resources"
-            }
-        }
-    }
+tasks.getByName<org.springframework.boot.gradle.tasks.bundling.BootJar>("bootJar") {
+   this.archiveFileName.set("ballchallenge.${archiveExtension.get()}")
 }
 
 tasks.named<Test>("test") {
