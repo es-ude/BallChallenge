@@ -7,13 +7,12 @@ on:
 
 permissions:
   contents: read
+  packages: write
 
 jobs:
-  container:
-    name: Publish Ball-Challenge App as Container Image
+  publish-image:
+    name: Publish BallChallenge App as Container Image
     runs-on: ubuntu-latest
-    permissions:
-      packages: write
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -22,20 +21,25 @@ jobs:
       - name: Get Release Version
         id: release
         uses: GuillaumeFalourd/get-release-or-tag@v2
-      - name: Setup Java
-        uses: actions/setup-java@v4
+      - name: Get Release Artifacts
+        uses: Itsblue/download-release-assets-action@v4
         with:
-          distribution: temurin
-          java-version: 22
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+          version: ${{ steps.release.outputs.tag }}
+          file: "ballchallenge.jar"
+          target: "cloud/app/build/libs"
+      - name: Build BallChallenge Image
+        working-directory: ./cloud
+        env:
+          REPOSITORY: ${{ github.repository }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          docker build . --file Dockerfile --tag ghcr.io/$REPOSITORY:$RELEASE_TAG --tag ghcr.io/$REPOSITORY:latest
       - name: Login to Github Container Registry
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor  }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build BallChallenge Image
-        run: ./gradlew -Pversion=${{ steps.release.outputs.tag}} :app:jibDockerBuild
       - name: Push Image to Github Container Registry
-        run: docker push --all-tags ghcr.io/es-ude/elastic-ai.cloud.applications.ball_challenge
+        run: |
+          docker push --all-tags "$REGISTRY_PATH/$GITHUB_REPOSITORY"

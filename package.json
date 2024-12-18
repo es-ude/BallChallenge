@@ -1,11 +1,6 @@
 {
   "name": "elastic-ai.ball-challenge",
   "private": true,
-  "release": {
-    "branches": [
-      "main"
-    ]
-  },
   "devDependencies": {
     "@commitlint/cli": "^19.5.0",
     "@commitlint/config-conventional": "^19.5.0",
