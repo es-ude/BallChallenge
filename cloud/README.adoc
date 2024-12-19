@@ -9,48 +9,56 @@ ifdef::env-github[]
 :caution-caption: :fire:
 :warning-caption: :warning:
 endif::[]
+ifndef::env-github[]
+:icons: font
+:idprefix:
+:idseparator: -
+endif::[]
 
 toc::[]
 
-[#_setup]
-== Setup
+== Run Container Image
 
-For compiling the project, the required tools are:
-
-- Java Development Kit (JDK) version 22
-- Docker (Container Runtime)
-
-We recommended pre-commit to check that the commit messages align with the conventional commit message standard.
-
-[IMPORTANT]
-====
-.HOST_IP
-[#_host_ip]
---
-The `elastic-AI.runtime.cloud:monitor` target requires the Host-IP to be addressed.
-The application will retrieve this information from a system environment variable called `HOST_IP`.
-Therefore, it is recommended that you execute
+A Container should be run with:
 
 [source,bash]
 ----
-# MacOS
-export HOST_IP=$(ipconfig getifaddr en0)
-
-# Linux
-export HOST_IP=$(hostname -I)
+docker run \
+    --rm \ #<1>
+    --network=runtime-network \ #<2>
+    --publish 8081:80 \ #<3>
+    --name ballchallenge \ #<4>
+    --env PUBLIC_IP=$(hostname -I) \ #<5>
+    --env BROKER_PORT=1883 \ #<5>
+    --env BROKER_IP=127.0.0.1 \ #<5>
+    --env CAMERA_PORT=8888 \ #<5>
+    --env CAMERA_IP=127.0.0.1 \ #<5>
+    ghcr.io/es-ude/elastic-ai.cloud.applications.ball_challenge:<tag>
 ----
 
-before starting the monitor (with docker or locally).
---
-====
+<1> Remove the container after shutdown
+<2> Required to communicate with the docker container running the MQTT broker
+<3> Port mapping for the webserver port, which allows the webinterface to be accessible from your browser (host:container)
+<4> Specify the name of the container
+<5> Set Variables for the app
 
-== Tests
+TIP: To ease your usage of the container it is recommended to provide an environment file instead of add each variable as a parameter.
+
+NOTE: An example compose file is provided under link:compose.yml[].
+
+== Development
+
+=== Setup
+
+For compiling the project, no additional tools are required.
+
+We recommended pre-commit to check that the commit messages align with the conventional commit message standard.
+
+=== Tests
 
 Unit tests and integration tests can be executed independently.
 Both use _jacoco_ to finalize the tests with a report that shows the test results and the code coverage.
 The reports can be found in the location `build/reports/` relative to the corresponding build file.
-
-=== Test execution
 
 |===
 | *Command* | *Task*
@@ -62,57 +70,48 @@ The reports can be found in the location `build/reports/` relative to the corres
 | Run ** all** Integration test
 |===
 
-== Applications
+=== Local Execution
 
 This repository provides the BallChallenge application.
 A specific implementation for the Ball Challenge.
+To start the application locally via Gradle run:
 
-To start the application locally via Gradle run
-
+.bootRun
+[[boot_run]]
 [source,bash]
 ----
+PUBLIC_IP=$(hostname -I) \
+CAMERA_IP=127.0.0.1 CAMERA_PORT=8888  \
 ./gradlew :app:bootRun
 ----
 
-=== Exit Codes
+.Environment Variables
+[NOTE]
+====
+Variables for the application are passed via Environment variables.
+This can be accomplished by either passing them to the `gradle` call like shown before (<<boot_run>>).
+Or by using a `.envrc` file in combination with a tool like https://direnv.net/[direnv] to automatically load them.
+====
 
-[cols=">,<"]
-|===
-| Exit Code | Description
+.Profiles
+[IMPORTANT]
+====
+For switching application profiles (lab, development, deploy) you can pass the selected one with
+[source, bash]
+----
+SPRING_PROFILES_ACTIVE=<profile> ... ./gradlew ...
+----
+====
 
-|         0 | No error
-|        10 | Argument Parser failed
-|===
+=== Build Container Image
 
-== Distribution
+A container image can be created with:
 
-[#_build_docker_container]
-=== Build Docker Container
-
-A docker container for can be created with:
-
+.build image
 [source,bash]
 ----
-./gradlew -Pversion=<version_tag> :app:jibDockerBuild
+docker build -f Dockerfile -t ghcr.io/es-ude/ballchallgne:develop
 ----
 
-This container can then be used in a docker-compose file or started manually.
+This container can then be used in a docker-compose file or started manually as described in <<run-container-image>>
 
-=== Run Docker Container
-
-A Container should be run with:
-
-[source,bash]
-----
-docker run \
-    --rm \ #<1>
-    --network=runtime-network \ #<2>
-    --publish 8081:80 \ #<3>
-    --name ballchallenge \ #<4>
-    ghcr.io/es-ude/elastic-ai.cloud.applications.ball_challenge:<tag>
-----
-
-<1> Remove the container after shutdown
-<2> Required to communicate with the docker container running the MQTT broker
-<3> Port mapping for the webserver port, which allows the webinterface to be accessible from your browser (host:container)
-<4> Specify the name of the container

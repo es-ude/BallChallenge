@@ -1,12 +1,12 @@
 # start with: docker compose up -d
 # stop with: docker compose down
 # Sensor Values can be found under ./SensorValues
-# Adjust camera ip
 
 services:
+  # Required if no public MQTT Broker available
   broker:
     image: hivemq/hivemq-ce:2023.4
-    restart: always
+    restart: unless-stopped
     environment:
       - HIVEMQ_LOG_LEVEL=ERROR
     networks:
@@ -14,9 +14,10 @@ services:
     ports:
       - "1883:1883"
 
+  # OPTIONAL: Overview of currently available apps/nodes
   monitor:
     image: ghcr.io/es-ude/elastic-ai.cloud.applications.monitor:latest
-    restart: always
+    restart: unless-stopped
     networks:
       - elastic-ai-network
     ports:
@@ -26,25 +27,25 @@ services:
     command:
       - "--broker-address"
       - "broker"
+      - "--broker-port"
+      - "1883"
 
   ball_challenge:
-    image: ghcr.io/es-ude/elastic-ai.cloud.applications.ball_challenge:latest
-    restart: always
+    image: ghcr.io/es-ude/ballchallenge:latest
     volumes:
       - ./SensorValues:/SensorValues
-    networks:
-      - elastic-ai-network
     ports:
       - "81:80"
+    networks:
+      - elastic-ai-network
     environment:
-      - HOST_IP=${HOST_IP}
-    command:
-      - "--broker-address"
-      - "broker"
-      - "--camera-address"
-      - "127.0.0.1"
+      - PUBLIC_IP=${HOST_IP}
+      - BROKER_PORT=1883
+      - BROKER_IP=broker
+      - CAMERA_PORT=8888
+      - CAMERA_IP=127.0.0.1
 
 networks:
   elastic-ai-network:
     external: false
-    name: elastic-ai-network
+    name: elastic-ai

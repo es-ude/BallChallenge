@@ -16,10 +16,12 @@ import lombok.Getter;
 
 public class BallChallengeEndpoint extends LocalCommunicationEndpoint {
 
-    private final String CAMERA_IP;
-    private final Integer CAMERA_PORT;
+    private final String CameraIp;
+
+    private final Integer CameraPort;
+
     private RemoteCommunicationEndpoint enV5;
-    private final String PATH = "SensorValues";
+    private final String DATA_PATH = "SensorValues";
 
     @Getter
     private final Set<String> enV5IDs = new HashSet<>();
@@ -33,17 +35,19 @@ public class BallChallengeEndpoint extends LocalCommunicationEndpoint {
     private DataRequester dataRequesterAccelerometer;
     private DataRequester dataRequesterTime;
 
-    public BallChallengeEndpoint(String CAMERA_IP, Integer CAMERA_PORT) {
+    public BallChallengeEndpoint(
+        String PublicIp,
+        Integer PublicPort,
+        String CameraIp,
+        Integer CameraPort
+    ) {
         super("ballChallengeApplication", "APPLICATION");
-        this.status.ADD_OPTIONAL(
-                "WEBSITE",
-                BallChallengeApplication.HOST_IP + ":" + BallChallengeApplication.PORT
-            );
+        this.status.ADD_OPTIONAL("WEBSITE", PublicIp + ":" + PublicPort);
 
-        this.CAMERA_IP = CAMERA_IP;
-        this.CAMERA_PORT = CAMERA_PORT;
+        this.CameraIp = CameraIp;
+        this.CameraPort = CameraPort;
 
-        File sensorValueDir = new File(PATH);
+        File sensorValueDir = new File(DATA_PATH);
         createFolder(sensorValueDir);
     }
 
@@ -120,7 +124,7 @@ public class BallChallengeEndpoint extends LocalCommunicationEndpoint {
         // Clear camera buffer
         for (int i = 0; i < 10; i++) {
             try (
-                InputStream ignored = new URI("http://" + CAMERA_IP + ":" + CAMERA_PORT + "/jpeg")
+                InputStream ignored = new URI("http://" + CameraIp + ":" + CameraPort + "/jpeg")
                     .toURL()
                     .openStream()
             ) {
@@ -132,7 +136,7 @@ public class BallChallengeEndpoint extends LocalCommunicationEndpoint {
 
         // Take picture
         try (
-            InputStream in = new URI("http://" + CAMERA_IP + ":" + CAMERA_PORT + "/jpeg")
+            InputStream in = new URI("http://" + CameraIp + ":" + CameraPort + "/jpeg")
                 .toURL()
                 .openStream()
         ) {
@@ -152,7 +156,7 @@ public class BallChallengeEndpoint extends LocalCommunicationEndpoint {
                 .toString()
                 .split("\\.")[0].replace(":", "-")
                 .replace(" ", "_");
-            String folderName = PATH + "/" + timeStamp;
+            String folderName = DATA_PATH + "/" + timeStamp;
             try {
                 System.out.println("Saving throw to: " + folderName);
 
