@@ -38,7 +38,7 @@ jobs:
       issues: write
       pull-requests: write
     outputs:
-      release_tag: ${{ steps.release.outputs.VERSION }} }
+      release_tag: ${{ steps.release.outputs.VERSION }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
