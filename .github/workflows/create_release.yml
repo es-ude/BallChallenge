@@ -15,7 +15,9 @@ jobs:
         uses: actions/checkout@v4
       - name: Build bootJar
         env:
-          SPRING_PROFILES_ACTIVE: lab
+          SPRING_PROFILES_ACTIVE: deploy
+          USERNAME: ${{ secrets.MAVEN_PACKAGES_USER }}
+          TOKEN: ${{ secrets.MAVEN_PACKAGES_TOKEN }}
         run: |
           cd cloud
           ./gradlew :app:bootJar
@@ -36,7 +38,7 @@ jobs:
       issues: write
       pull-requests: write
     outputs:
-      release_tag: ${{ steps.release.outputs.VERSION }}
+      release_tag: ${{ steps.release.outputs.VERSION }} }
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
