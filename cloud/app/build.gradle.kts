@@ -14,7 +14,11 @@ repositories {
     mavenCentral()
 
     maven {
-        url = uri("https://maven.pkg.github.com/es-ude/elastic.ai-runtime.cloud")
+        url = uri("https://maven.pkg.github.com/es-ude/elastic-ai.runtime.cloud")
+        credentials {
+            username = project.findProperty("gpr.user") ?: System.getenv("USERNAME")
+            password = project.findProperty("gpr.key") ?: System.getenv("TOKEN")
+        }
     }
 }
 
@@ -33,7 +37,7 @@ dependencies {
     // endregion TEST dependencies
 
     // region IMPLEMENTATION dependencies
-    implementation("de.ude.ies.elastic_ai.cloud:runtime:0.0.1")
+    implementation("de.ude.ies.elastic_ai.cloud:runtime:5.0.2")
 
     implementation(libs.guava)
     implementation("com.google.guava:guava:33.0.0-jre")
