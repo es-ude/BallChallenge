@@ -8,12 +8,16 @@
       {
         "successComment": false,
         "failComment": false,
-        "assets": [
-          {
-            "path": "cloud/app/build/ballchallenge.jar",
-            "label": "Ball-Challenge Java executable."
-          }
-        ]
+        "assets": {
+          "path": "cloud/app/build/ballchallenge.jar",
+          "label": "Ball-Challenge Java executable."
+        }
+      }
+    ],
+    [
+      "@semantic-release/exec",
+      {
+        "publishCmd": "echo \"VERSION=${nextRelease.version}\" >> $GITHUB_OUTPUT"
       }
     ]
   ]
