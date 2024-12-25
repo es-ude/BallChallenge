@@ -16,8 +16,8 @@ repositories {
     maven {
         url = uri("https://maven.pkg.github.com/es-ude/elastic-ai.runtime.cloud")
         credentials {
-            username = project.findProperty("gpr.user") ?: System.getenv("USERNAME")
-            password = project.findProperty("gpr.key") ?: System.getenv("TOKEN")
+            username = System.getenv("USERNAME")
+            password = System.getenv("TOKEN")
         }
     }
 }
