@@ -9,7 +9,7 @@
         "successComment": false,
         "failComment": false,
         "assets": {
-          "path": "cloud/app/build/ballchallenge.jar",
+          "path": "cloud/app/build/libs/ballchallenge.jar",
           "label": "Ball-Challenge Java executable."
         }
       }
