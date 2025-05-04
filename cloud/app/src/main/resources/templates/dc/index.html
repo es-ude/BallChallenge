@@ -1,0 +1,69 @@
+<!doctype html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+    <head th:replace="~{fragments/layout :: head}">
+        <title>BC Data Collect</title>
+    </head>
+    <body>
+        <header th:replace="~{fragments/layout :: header}"></header>
+
+        <main>
+            <section class="d-flex flex-column align-items-center content-padding">
+                <h1 class="row">Data Collect</h1>
+                <form
+                    th:action="@{/dc/start}"
+                    method="post"
+                    th:object="${startRequest}"
+                    class="container pt-3"
+                >
+                    <div class="row">
+                        <div class="input-group">
+                            <label class="input-group-text" id="node-label">Selected Node</label>
+                            <select
+                                name="node"
+                                class="form-select"
+                                th:field="*{node}"
+                                aria-describedby="Selected Node"
+                                aria-label="node-label"
+                            >
+                                <option value="NULL">Please select!</option>
+                                <option
+                                    th:each="node: ${nodes}"
+                                    th:value="${node}"
+                                    th:text="${node} "
+                                ></option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="input-group">
+                            <label class="input-group-text" id="user-label"
+                                >Selected Participant</label
+                            >
+                            <select
+                                name="user"
+                                class="form-select"
+                                th:field="*{user}"
+                                aria-describedby="Selected User"
+                                aria-label="user-label"
+                            >
+                                <option value="NULL">Please select!</option>
+                                <option
+                                    th:each="participant: ${participants}"
+                                    th:value="${participant.getId()}"
+                                    th:text="${participant.getName()} "
+                                ></option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-12">
+                            <button type="submit" class="btn btn-success w-100">Start</button>
+                        </div>
+                    </div>
+                </form>
+            </section>
+        </main>
+
+        <footer th:replace="~{fragments/layout :: footer}"></footer>
+    </body>
+</html>

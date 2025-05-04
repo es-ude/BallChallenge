@@ -30,9 +30,8 @@ dependencies {
     testImplementation("org.testcontainers:testcontainers:1.20.3")
     testImplementation("org.testcontainers:junit-jupiter:1.20.3")
     testImplementation("org.testcontainers:hivemq:1.20.3")
-    testImplementation("org.slf4j:slf4j-api:2.0.32")
-    testImplementation("ch.qos.logback:logback-core:1.4.14")
-    testImplementation("ch.qos.logback:logback-classic:1.4.12")
+    testImplementation("ch.qos.logback:logback-core:1.5.13")
+    testImplementation("ch.qos.logback:logback-classic:1.5.13")
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     // endregion TEST dependencies
 
@@ -42,10 +41,12 @@ dependencies {
     implementation(libs.guava)
     implementation("com.google.guava:guava:33.0.0-jre")
 
+    developmentOnly("org.springframework.boot:spring-boot-devtools")
     implementation("org.springframework.boot:spring-boot-starter-data-rest")
     implementation("org.springframework.boot:spring-boot-starter-thymeleaf")
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-web-services")
+    implementation("org.springframework.boot:spring-boot-starter-data-jpa")
 
     implementation("org.webjars:jquery:3.6.3")
     implementation("org.webjars:bootstrap:5.2.3")
@@ -58,6 +59,8 @@ dependencies {
 
     annotationProcessor("org.springframework.boot:spring-boot-configuration-processor")
     annotationProcessor("org.projectlombok:lombok")
+
+    runtimeOnly("com.h2database:h2")
     // endregion IMPLEMENTATION dependencies
 }
 
@@ -73,7 +76,7 @@ application {
 }
 
 tasks.getByName<org.springframework.boot.gradle.tasks.bundling.BootJar>("bootJar") {
-   this.archiveFileName.set("ballchallenge.${archiveExtension.get()}")
+    this.archiveFileName.set("ballchallenge.${archiveExtension.get()}")
 }
 
 tasks.named<Test>("test") {

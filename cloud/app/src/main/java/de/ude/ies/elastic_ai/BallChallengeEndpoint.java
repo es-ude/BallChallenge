@@ -4,16 +4,23 @@ import static de.ude.ies.elastic_ai.protocol.Status.State.ONLINE;
 
 import de.ude.ies.elastic_ai.communicationEndpoints.LocalCommunicationEndpoint;
 import de.ude.ies.elastic_ai.communicationEndpoints.RemoteCommunicationEndpoint;
+import de.ude.ies.elastic_ai.entities.User;
+import de.ude.ies.elastic_ai.protocol.Posting;
 import de.ude.ies.elastic_ai.protocol.Status;
 import de.ude.ies.elastic_ai.protocol.requests.DataRequester;
 import java.io.*;
 import java.net.*;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.sql.Timestamp;
+import java.text.*;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import lombok.Getter;
+import lombok.Setter;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 public class BallChallengeEndpoint extends LocalCommunicationEndpoint {
 
     private final String CameraIp;
@@ -21,19 +28,25 @@ public class BallChallengeEndpoint extends LocalCommunicationEndpoint {
     private final Integer CameraPort;
 
     private RemoteCommunicationEndpoint enV5;
+
+    @Setter
+    private User user;
+
     private final String DATA_PATH = "SensorValues";
 
     @Getter
     private final Set<String> enV5IDs = new HashSet<>();
 
-    @Getter
-    private String lastTime = "";
+    DateTimeFormatter timestampFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss");
 
     @Getter
-    private String lastGValue = "";
+    private String countdown = "";
+
+    @Getter
+    private String[] lastMeasurement = null;
 
     private DataRequester dataRequesterAccelerometer;
-    private DataRequester dataRequesterTime;
+    private DataRequester dataRequesterCountdown;
 
     public BallChallengeEndpoint(
         String PublicIp,
@@ -53,75 +66,127 @@ public class BallChallengeEndpoint extends LocalCommunicationEndpoint {
 
     @Override
     protected void executeOnBind() {
-        RemoteCommunicationEndpoint statusReceiver = new RemoteCommunicationEndpoint("+");
-        statusReceiver.bindToCommunicationEndpoint(broker);
-        statusReceiver.subscribeForStatus(posting -> {
-            if (Objects.equals(Status.extractFromStatus(posting.data(), "TYPE"), "enV5")) {
-                if (
-                    Objects.equals(
-                        Status.extractFromStatus(posting.data(), "STATE"),
-                        ONLINE.toString()
-                    )
-                ) {
-                    enV5IDs.add(Status.extractFromStatus(posting.data(), "ID"));
-                } else {
-                    enV5IDs.remove(Status.extractFromStatus(posting.data(), "ID"));
-                }
-            }
-        });
+        setupStatusReceiver();
     }
 
+    // region DEVICE LIST
+
+    private void setupStatusReceiver() {
+        RemoteCommunicationEndpoint statusReceiver = new RemoteCommunicationEndpoint("+");
+        statusReceiver.bindToCommunicationEndpoint(broker);
+        statusReceiver.subscribeForStatus(this::statusHandler);
+    }
+
+    private void statusHandler(Posting posting) {
+        if (Status.extractFromStatus(posting.data(), "TYPE").equals("enV5")) {
+            String state = Status.extractFromStatus(posting.data(), "STATE");
+            String id = Status.extractFromStatus(posting.data(), "ID");
+
+            if (state.equals(ONLINE.toString())) {
+                enV5IDs.add(id);
+            } else {
+                enV5IDs.remove(id);
+            }
+        }
+    }
+
+    // endregion DEVICE LIST
+
+    // region UPDATE NODE/USER
+
     public void setEnV5ID(String id) {
-        if (enV5 != null && Objects.equals(enV5.getIdentifier(), id)) {
-            return;
+        if (enV5 == null || !enV5.getIdentifier().equals(id)) {
+            resetStub();
+            resetValueStore();
+            if (!id.isEmpty()) {
+                createStub(id);
+            }
         }
+    }
 
-        resetStub();
+    private void resetValueStore() {
+        lastMeasurement = null;
+        countdown = null;
+    }
 
-        if (Objects.equals(id, "")) {
-            return;
+    private void resetStub() {
+        enV5 = null;
+        if (dataRequesterAccelerometer != null) {
+            dataRequesterAccelerometer.listenToData(false);
         }
-
-        createStub(id);
+        if (dataRequesterCountdown != null) {
+            dataRequesterCountdown.listenToData(false);
+        }
     }
 
     private void createStub(String id) {
         enV5 = new RemoteCommunicationEndpoint(id);
         enV5.bindToCommunicationEndpoint(broker);
+        setupDataRequesterAccelerometer();
+        setupDataRequesterTimer();
+    }
+
+    private void setupDataRequesterAccelerometer() {
         dataRequesterAccelerometer = new DataRequester(
             enV5,
             "acceleration",
             getDomainAndIdentifier()
         );
-        dataRequesterAccelerometer.setDataReceiveFunction(handleThrowData());
+        dataRequesterAccelerometer.setDataReceiveFunction(new ThrowHandler());
         dataRequesterAccelerometer.listenToData(true);
-
-        dataRequesterTime = new DataRequester(enV5, "timer", getDomainAndIdentifier());
-        dataRequesterTime.setDataReceiveFunction(data -> lastTime = data);
-        dataRequesterTime.listenToData(true);
     }
 
-    private void resetStub() {
-        enV5 = null;
-        lastGValue = "";
-        if (dataRequesterAccelerometer != null) {
-            dataRequesterAccelerometer.listenToData(false);
-        }
-        lastTime = "";
-        if (dataRequesterTime != null) {
-            dataRequesterTime.listenToData(false);
-        }
+    private void setupDataRequesterTimer() {
+        dataRequesterCountdown = new DataRequester(enV5, "timer", getDomainAndIdentifier());
+        dataRequesterCountdown.setDataReceiveFunction(data -> countdown = data);
+        dataRequesterCountdown.listenToData(true);
     }
 
-    public void publishStartMeasurement() {
+    // endregion UPDATE NODE/USER
+
+    // region TAKE MEASUREMENT
+
+    public void startMeasurement() {
         if (enV5 == null) {
-            return;
+            throw new IllegalStateException("No enV5 available");
         }
+        countdown = null;
+        lastMeasurement = null;
         enV5.publishCommand("MEASUREMENT", this.identifier);
     }
 
+    private class ThrowHandler implements DataExecutor {
+
+        @Override
+        public void execute(String data) {
+            log.info("Handling datasource");
+            String folderName = DATA_PATH + "/" + timestampFormat.format(LocalDateTime.now());
+            createFolder(new File(folderName));
+            saveParticipant(folderName, user);
+            saveData(folderName, data);
+            savePicture(folderName);
+        }
+    }
+
+    private void createFolder(File folder) {
+        if (folder.isFile()) {
+            throw new RuntimeException("Folder already exists and is a file!");
+        } else if (folder.isDirectory()) {} else if (!folder.mkdirs()) {
+            throw new RuntimeException("Can't create folder to store sensor values!");
+        }
+    }
+
     private void savePicture(String filePath) {
-        // Clear camera buffer
+        try {
+            clearCameraBuffer();
+            takePicture(filePath);
+        } catch (RuntimeException | IOException e) {
+            log.error(e.getMessage());
+            log.warn("No picture taken!");
+        }
+    }
+
+    private void clearCameraBuffer() throws RuntimeException {
         for (int i = 0; i < 10; i++) {
             try (
                 InputStream ignored = new URI("http://" + CameraIp + ":" + CameraPort + "/jpeg")
@@ -133,8 +198,9 @@ public class BallChallengeEndpoint extends LocalCommunicationEndpoint {
                 throw new RuntimeException(e);
             }
         }
+    }
 
-        // Take picture
+    private void takePicture(String filePath) throws RuntimeException, IOException {
         try (
             InputStream in = new URI("http://" + CameraIp + ":" + CameraPort + "/jpeg")
                 .toURL()
@@ -143,55 +209,41 @@ public class BallChallengeEndpoint extends LocalCommunicationEndpoint {
             Files.copy(in, Paths.get(filePath + "/image.jpg"));
         } catch (MalformedURLException | URISyntaxException e) {
             throw new RuntimeException(e);
+        }
+    }
+
+    private void saveParticipant(String folderName, User participant) {
+        try (FileWriter csvWriter = new FileWriter(folderName + "/user.csv", false)) {
+            log.info("Saving user to '{}/user.csv'", folderName);
+            csvWriter
+                .append("name")
+                .append(", ")
+                .append("shoulder height")
+                .append(", ")
+                .append("arm length")
+                .append(", ")
+                .append("dominant Hand")
+                .append("\n");
+            csvWriter.append(participant.getName()).append(", ");
+            csvWriter.append(String.valueOf(participant.getShoulderHeight())).append(", ");
+            csvWriter.append(String.valueOf(participant.getArmLength())).append(", ");
+            csvWriter.append(participant.getDominantHand().name()).append("\n");
         } catch (IOException e) {
-            System.out.println("NO PICTURE TAKEN!!!");
+            throw new RuntimeException(e);
         }
     }
 
-    private DataExecutor handleThrowData() {
-        return data -> {
-            System.out.println("Handling data");
-            lastGValue = data.split(";")[0];
-            String timeStamp = new Timestamp(System.currentTimeMillis())
-                .toString()
-                .split("\\.")[0].replace(":", "-")
-                .replace(" ", "_");
-            String folderName = DATA_PATH + "/" + timeStamp;
-            try {
-                System.out.println("Saving throw to: " + folderName);
-
-                File csvDir = new File(folderName);
-                createFolder(csvDir);
-
-                savePicture(folderName);
-
-                FileWriter csvWriter = new FileWriter(folderName + "/measurement.csv", false);
-
-                csvWriter
-                    .append("x")
-                    .append(",")
-                    .append("y")
-                    .append(",")
-                    .append("z")
-                    .append("\n")
-                    .append(data.replace(";", "\n"));
-                csvWriter.flush();
-                csvWriter.close();
-            } catch (IOException e) {
-                throw new RuntimeException(e);
+    private void saveData(String folderName, String data) {
+        lastMeasurement = data.split(";");
+        try (FileWriter csvWriter = new FileWriter(folderName + "/measurement.csv", false)) {
+            log.info("Saving data to '{}/measurement.csv'", folderName);
+            csvWriter.append("x").append(", ").append("y").append(", ").append("z").append("\n");
+            for (String sample : lastMeasurement) {
+                csvWriter.append(sample.strip()).append("\n");
             }
-        };
-    }
-
-    private void createFolder(File folder) {
-        if (folder.isFile()) {
-            throw new RuntimeException("Folder already exists and is a file!");
-        }
-        if (folder.isDirectory()) {
-            return;
-        }
-        if (!folder.mkdirs()) {
-            throw new RuntimeException("Can't create folder to store sensor values!");
+        } catch (IOException e) {
+            throw new RuntimeException(e);
         }
     }
+    // endregion TAKE MEASUREMENT
 }

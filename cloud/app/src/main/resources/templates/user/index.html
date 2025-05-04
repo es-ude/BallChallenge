@@ -1,0 +1,126 @@
+<!doctype html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+    <head th:replace="~{fragments/layout :: head}">
+        <title>BC Data Collect</title>
+    </head>
+    <body>
+        <header th:replace="~{fragments/layout :: header}"></header>
+
+        <main>
+            <section class="d-flex flex-column align-items-center content-padding">
+                <h1>Add User</h1>
+                <form action="/user/add" th:object="${newUser}" method="post">
+                    <div class="input-group">
+                        <label class="input-group-text" id="username-label">Name</label>
+                        <input
+                            type="text"
+                            th:field="*{name}"
+                            class="form-control"
+                            aria-label="username"
+                            aria-describedby="username-label"
+                            required
+                        />
+                    </div>
+                    <div class="input-group">
+                        <label class="input-group-text" id="shoulder-label">Shoulder Height</label>
+                        <input
+                            type="number"
+                            min="50"
+                            max="250"
+                            step="1"
+                            th:field="*{shoulderHeight}"
+                            class="form-control text-end"
+                            aria-label="shoulder-height"
+                            aria-describedby="shoulder-label"
+                            required
+                        />
+                        <span class="input-group-text">cm</span>
+                    </div>
+                    <div class="input-group">
+                        <label class="input-group-text" id="arm-label">Arm Length</label>
+                        <input
+                            type="number"
+                            min="25"
+                            max="200"
+                            step="1"
+                            th:field="*{armLength}"
+                            class="form-control text-end"
+                            aria-label="arm-length"
+                            aria-describedby="arm-label"
+                            required
+                        />
+                        <span class="input-group-text">cm</span>
+                    </div>
+                    <div class="input-group">
+                        <label class="input-group-text">Dominant Hand</label>
+                        <div class="form-control">
+                            <div class="form-check form-check-inline">
+                                <input
+                                    name="dominant-hand"
+                                    th:field="*{dominantHand}"
+                                    type="radio"
+                                    class="form-check-input"
+                                    value="LEFT"
+                                    aria-label="left hand dominant"
+                                    aria-describedby="lefthand-label"
+                                    required
+                                />
+                                <label class="form-check-label" id="lefthand-label">LEFT</label>
+                            </div>
+                            <div class="form-check form-check-inline">
+                                <input
+                                    name="dominant-hand"
+                                    type="radio"
+                                    th:field="*{dominantHand}"
+                                    class="form-check-input"
+                                    value="RIGHT"
+                                    aria-label="right hand dominant"
+                                    aria-describedby="righthand-label"
+                                    required
+                                />
+                                <label class="form-check-label" id="righthand-label">RIGHT</label>
+                            </div>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-success w-100">Add</button>
+                </form>
+            </section>
+
+            <section class="d-flex flex-column align-items-center content-padding">
+                <h1>Registered Participants</h1>
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th scope="col">UUID</th>
+                            <th scope="col">Name</th>
+                            <th scope="col">Shoulder Height [cm]</th>
+                            <th scope="col">Arm Length [cm]</th>
+                            <th scope="col">Dominant Hand</th>
+                            <th scope="col"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr th:each="user: ${users}">
+                            <td th:text="${user.getId()}"></td>
+                            <th scope="row" th:text="${user.getName()}"></th>
+                            <td th:text="${user.getShoulderHeight()}"></td>
+                            <td th:text="${user.getArmLength()}"></td>
+                            <td th:text="${user.getDominantHand().name()}"></td>
+                            <td>
+                                <a
+                                    class="btn btn-primary"
+                                    th:href="${'/user/' + user.getId()}"
+                                    title="user info"
+                                >
+                                    <i class="fa-solid fa-circle-info"></i>
+                                </a>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </section>
+        </main>
+
+        <footer th:replace="~{fragments/layout :: footer}"></footer>
+    </body>
+</html>

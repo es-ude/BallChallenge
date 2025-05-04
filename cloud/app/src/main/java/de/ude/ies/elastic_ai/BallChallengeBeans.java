@@ -5,7 +5,6 @@ import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.SocketException;
 import java.net.UnknownHostException;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
@@ -13,8 +12,11 @@ import org.springframework.stereotype.Component;
 @Component
 public class BallChallengeBeans {
 
-    @Autowired
-    private Environment env;
+    private final Environment env;
+
+    public BallChallengeBeans(final Environment env) {
+        this.env = env;
+    }
 
     @Bean
     public String PublicIp() {
