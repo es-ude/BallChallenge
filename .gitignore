@@ -4,6 +4,7 @@
 .envrc
 *NetworkConfig.c
 enV5/picotool/picotool*
+**/SensorValues/
 
 
 ### IDE

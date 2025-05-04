@@ -5,15 +5,15 @@
 
 #define SOURCE_FILE "DATA-COLLECT-APP"
 
+// external headers
+#include <string.h>
+
 // pico-sdk headers
 #include "hardware/i2c.h"
 #include "hardware/watchdog.h"
 #include "pico/bootrom.h"
 #include "pico/stdio.h"
 #include "pico/stdio_usb.h"
-
-// external headers
-#include <string.h>
 
 // internal headers
 #include "Adxl345b.h"
@@ -59,7 +59,7 @@ mutex_t espOccupied;
 
 i2cConfiguration_t i2cBus = {
     .i2cInstance = I2C_MODULE,
-    .frequency = 2000000,
+    .frequency = 400000,
     .sclPin = I2C_SCL_PIN,
     .sdaPin = I2C_SDA_PIN,
 };
@@ -107,7 +107,6 @@ static void initialize(void) {
 }
 
 _Noreturn void watchdogTask(void) {
-    protocolPublishData("test", "watchdog");
     watchdog_enable(10000, 1); // enables watchdog timer (10 seconds)
 
     while (1) {
@@ -190,7 +189,7 @@ static void showCountdown(void) {
     env5HwControllerLedsAllOff();
     freeRtosTaskWrapperTaskSleep(250);
     pubRequest.topic = malloc(strlen(TIMER_TOPIC) + 1);
-    strcpy(pubRequest.topic, "time");
+    strcpy(pubRequest.topic, TIMER_TOPIC);
     pubRequest.data = malloc(2);
     strcpy(pubRequest.data, "0");
     freeRtosQueueWrapperPush(publishRequests, &pubRequest);
@@ -212,7 +211,7 @@ static char *appendSample(char *dest, float xAxis, float yAxis, float zAxis) {
     dest += 14;
     snprintf(dest, 15, "%13.9f,", yAxis);
     dest += 14;
-    snprintf(dest, 15, "%13.9f\n", zAxis);
+    snprintf(dest, 15, "%13.9f;", zAxis);
     dest += 14;
     return dest;
 }

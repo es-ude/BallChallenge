@@ -213,7 +213,7 @@ static void showCountdown(void) {
     env5HwControllerLedsAllOff();
     freeRtosTaskWrapperTaskSleep(250);
     pubRequest.topic = malloc(strlen(TIMER_TOPIC) + 1);
-    strcpy(pubRequest.topic, "time");
+    strcpy(pubRequest.topic, TIMER_TOPIC);
     pubRequest.data = malloc(2);
     strcpy(pubRequest.data, "0");
     freeRtosQueueWrapperPush(publishRequests, &pubRequest);
@@ -223,7 +223,6 @@ static bool getSample(uint32_t *timeOfMeasurement, float *xAxis, float *yAxis, f
     CEXCEPTION_T exception;
     Try {
         if (BMI3_INT_STATUS_ACC_DRDY & bmi323GetInterruptStatus(&sensor, BMI323_INTERRUPT_1)) {
-            PRINT("REACHED");
             bmi323SensorData_t data[1];
             data[0].type = BMI323_ACCEL;
             bmi323GetData(&sensor, 1, data);
@@ -251,7 +250,7 @@ static char *appendSample(char *dest, float xAxis, float yAxis, float zAxis) {
     dest += 14;
     snprintf(dest, 15, "%13.9f,", yAxis);
     dest += 14;
-    snprintf(dest, 15, "%13.9f\n", zAxis);
+    snprintf(dest, 15, "%13.9f;", zAxis);
     dest += 14;
     return dest;
 }
