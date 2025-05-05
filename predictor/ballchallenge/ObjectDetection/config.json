@@ -1,0 +1,11 @@
+{
+  "image_paths": [
+    "images/prototype_images/ProtoImage01.jpeg",
+    "images/prototype_images/ProtoImage02.jpeg",
+    "images/prototype_images/ProtoImage03.jpeg"
+  ],
+  "empty_image": "images/exception_images/empty.jpeg",
+  "edge_image": "images/exception_images/edge.jpeg",
+  "original_image": "images/original_grid_picture/download.png",
+  "extract_coordinates_image": "images/extract_point_images/jpeg.jfif"
+}

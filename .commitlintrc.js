@@ -13,7 +13,7 @@ module.exports = {
     "scope-enum": [
       2,
       "always",
-      ["workflow", "unit-test", "data-collect", "wrist", "readme", "webapp", "github"],
+      ["workflow", "unit-test", "data-collect", "wrist", "readme", "webapp", "github", "predictor"],
     ],
     "subject-empty": [2, "never"],
   },

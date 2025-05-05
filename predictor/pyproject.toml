@@ -1,0 +1,21 @@
+[project]
+name = "predictor"
+version = "0.1.0"
+description = "Python Backend for the Ball Challanege."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "elasticai-creator",
+    "ipykernel>=6.29.5",
+    "jupyterlab>=4.4.1",
+    "matplotlib>=3.10.1",
+    "numpy>=2.2.5",
+    "opencv-python>=4.11.0.86",
+    "pandas>=2.2.3",
+    "pyarrow>=20.0.0",
+    "seaborn>=0.13.2",
+    "torch>=2.7.0",
+]
+
+[tool.uv.sources]
+elasticai-creator = { git = "https://github.com/es-ude/elastic-ai.creator.git", rev = "main" }
