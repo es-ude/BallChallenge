@@ -33,6 +33,11 @@ public class DataCollectController {
         private UUID user;
     }
 
+    // add camera livestream (disable/enable)
+    // show last sample as plot (python script for png from seaborn)
+    // show image with bounding box (python script)
+    // show prediction (python script, only empty shell)
+
     private final BallChallengeEndpoint endpoint;
 
     private final UserRepository users;

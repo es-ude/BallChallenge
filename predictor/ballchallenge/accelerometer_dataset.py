@@ -1,10 +1,10 @@
 from collections.abc import Callable
-from typing import Any, Optional
 from pathlib import Path
+from typing import Any, Optional
 
+import pandas as pd
 import torch
 from torch.utils.data import Dataset
-import pandas as pd
 
 from ballchallenge.label_generation import generate_smooth_labels
 
@@ -25,7 +25,9 @@ def _load_samples_and_positions(
     return torch.stack(samples), positions
 
 
-def make_functions_for_normalizing_and_denormalizing_positions(lower_left_corner: tuple[int, int], upper_right_corner: tuple[int, int]):
+def make_functions_for_normalizing_and_denormalizing_positions(
+    lower_left_corner: tuple[int, int], upper_right_corner: tuple[int, int]
+):
     ll = torch.tensor(lower_left_corner, dtype=torch.float32)
     ur = torch.tensor(upper_right_corner, dtype=torch.float32)
     offset = ((ll - ur) / 2).view(1, 2)
