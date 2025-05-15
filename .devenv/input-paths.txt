@@ -1,0 +1,7 @@
+/home/federl_david/Repositories/elastic-ai/BallChallenge/.devenv/flake.json
+/home/federl_david/Repositories/elastic-ai/BallChallenge/.devenv.flake.nix
+/home/federl_david/Repositories/elastic-ai/BallChallenge/.env
+/home/federl_david/Repositories/elastic-ai/BallChallenge/devenv.local.nix
+/home/federl_david/Repositories/elastic-ai/BallChallenge/devenv.lock
+/home/federl_david/Repositories/elastic-ai/BallChallenge/devenv.nix
+/home/federl_david/Repositories/elastic-ai/BallChallenge/devenv.yaml

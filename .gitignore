@@ -5,6 +5,7 @@
 *NetworkConfig.c
 enV5/picotool/picotool*
 **/SensorValues/
+settings/
 
 
 ### IDE
@@ -533,3 +534,13 @@ gradle-app.setting
 # JDT-specific (Eclipse Java Development Tools)
 .classpath
 
+
+# Devenv
+.devenv*
+devenv.local.nix
+
+# direnv
+.direnv
+
+# pre-commit
+.pre-commit-config.yaml
