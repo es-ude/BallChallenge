@@ -5,11 +5,12 @@
 *NetworkConfig.c
 enV5/picotool/picotool*
 **/SensorValues/
-
-
+debug
+Demo/ProjectorCameraCalibration/debug
 ### IDE
 .idea/
 
+**/log.*
 ### Nodejs
 # Logs
 logs
